@@ -71,6 +71,29 @@ Verify a web build by reading the bytes that ship, not a file listing:
 tar xzO -f build/planet_protectors/build/web/planet_protectors.tar.gz assets/main.py
 ```
 
+## Adding art
+
+**Art belongs inside `src/planet_protectors/`**, e.g. `src/planet_protectors/images/`. The
+build stages only `main.py` and the package directory, so an `assets/` folder at the
+repository root is silently dropped from the browser bundle — no error, just missing art.
+
+**Load images relative to the module**, not the working directory, which differs between
+the desktop and browser builds:
+
+```python
+Path(__file__).parent / "images" / "boss.png"
+```
+
+**Keep images small.** Source photographs from `docs/extra_docs/` are iPhone-sized (~3 MB,
+3826x2786). The whole game bundle is a few KB; at a 960x540 screen a few hundred KB per
+image is plenty, and full-resolution art makes the first browser load painful.
+
+Check what actually shipped rather than trusting the source tree:
+
+```commandline
+tar tzf build/planet_protectors/build/web/planet_protectors.tar.gz
+```
+
 ## Ground rules
 
 - **Never perform git write actions.** Do not commit, create branches, push, tag, or open

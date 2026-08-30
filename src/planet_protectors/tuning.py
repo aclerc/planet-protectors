@@ -27,22 +27,35 @@ class Tuning:
     screen_height: int = 540
     frames_per_second: int = 60
 
-    space_colour: Colour = (18, 16, 40)
-    text_colour: Colour = (240, 240, 245)
+    sky_colour: Colour = (236, 234, 230)
+    ground_colour: Colour = (183, 40, 28)
+    tree_colour: Colour = (198, 54, 38)
+    trunk_colour: Colour = (146, 40, 28)
+    bush_colour: Colour = (158, 36, 26)
+    ink_colour: Colour = (26, 24, 26)
+    text_colour: Colour = (36, 30, 30)
+    ground_top: int = 440
 
-    pina_colour: Colour = (90, 200, 250)
-    pina_radius: int = 45
-    pina_centre: Point = (150, 400)
+    pina_colour: Colour = (204, 46, 32)
+    teal_colour: Colour = (22, 140, 146)
+    pina_radius: int = 50
+    pina_centre: Point = (200, 350)
 
-    boss_colour: Colour = (230, 90, 110)
+    boss_colour: Colour = (146, 148, 152)
+    boss_shade_colour: Colour = (108, 110, 116)
     boss_radius: int = 95
-    boss_centre: Point = (560, 220)
+    boss_centre: Point = (700, 200)
 
     bar_height: int = 26
     bar_margin: int = 40
     boss_bar_top: int = 30
     pina_bar_top: int = 470
+    boss_bar_colour: Colour = (92, 94, 100)
+    pina_bar_colour: Colour = (22, 140, 146)
 
+    message_centre: Point = (480, 360)
+    label_font_size: int = 56
+    message_font_size: int = 40
     dodge_button_size: Point = (240, 74)
     dodge_button_centre: Point = (480, 380)
     dodge_colour: Colour = (250, 205, 90)

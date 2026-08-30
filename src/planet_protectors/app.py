@@ -9,10 +9,12 @@ import math
 
 import pygame
 
+from planet_protectors import art
 from planet_protectors.bossfight import BossFight, FightState
 from planet_protectors.tuning import TUNING, Colour, Point
 
-BAR_BACKGROUND: Colour = (60, 58, 90)
+BAR_BACKGROUND: Colour = (52, 44, 44)
+MESSAGE_BORDER = 4
 
 
 def is_inside_circle(point: Point, *, centre: Point, radius: int) -> bool:
@@ -45,32 +47,46 @@ def draw_centred_text(surface: pygame.Surface, text: str, *, font: pygame.font.F
     surface.blit(rendered, rendered.get_rect(center=centre))
 
 
-def draw_fight(surface: pygame.Surface, fight: BossFight, *, font: pygame.font.Font) -> None:
-    """Draw the whole fight: the blobs, both health bars, and whatever prompt is showing."""
-    surface.fill(TUNING.space_colour)
+def draw_message(surface: pygame.Surface, text: str, *, font: pygame.font.Font, centre: Point) -> None:
+    """Draw a message on a card, so it can be read wherever on the planet it lands."""
+    rendered = font.render(text, True, TUNING.text_colour)  # noqa: FBT003
+    card = rendered.get_rect(center=centre).inflate(48, 36)
+    pygame.draw.rect(surface, TUNING.sky_colour, card, border_radius=18)
+    pygame.draw.rect(surface, TUNING.ink_colour, card, MESSAGE_BORDER, border_radius=18)
+    surface.blit(rendered, rendered.get_rect(center=centre))
 
-    pygame.draw.circle(surface, TUNING.boss_colour, TUNING.boss_centre, TUNING.boss_radius)
-    pygame.draw.circle(surface, TUNING.pina_colour, TUNING.pina_centre, TUNING.pina_radius)
+
+def draw_fight(
+    surface: pygame.Surface,
+    fight: BossFight,
+    *,
+    font: pygame.font.Font,
+    message_font: pygame.font.Font,
+) -> None:
+    """Draw the whole fight: the blobs, both health bars, and whatever prompt is showing."""
+    art.draw_background(surface)
+    art.draw_boss(surface, centre=TUNING.boss_centre)
+    art.draw_pina(surface, centre=TUNING.pina_centre)
 
     draw_health_bar(
         surface,
         top=TUNING.boss_bar_top,
         health=fight.boss_health,
         maximum=TUNING.boss_max_health,
-        colour=TUNING.boss_colour,
+        colour=TUNING.boss_bar_colour,
     )
     draw_health_bar(
         surface,
         top=TUNING.pina_bar_top,
         health=fight.pina_health,
         maximum=TUNING.pina_max_health,
-        colour=TUNING.pina_colour,
+        colour=TUNING.pina_bar_colour,
     )
 
     if fight.state is FightState.WON:
-        draw_centred_text(surface, "You saved the planet, Pina!", font=font, centre=TUNING.dodge_button_centre)
+        draw_message(surface, "You saved the planet, Pina!", font=message_font, centre=TUNING.message_centre)
     elif fight.state is FightState.LOST:
-        draw_centred_text(surface, "Ouch! Try again, Pina!", font=font, centre=TUNING.dodge_button_centre)
+        draw_message(surface, "Ouch! Try again, Pina!", font=message_font, centre=TUNING.message_centre)
     elif fight.attack_incoming:
         pygame.draw.rect(surface, TUNING.dodge_colour, dodge_button_rect(), border_radius=16)
         draw_centred_text(surface, "DODGE!", font=font, centre=TUNING.dodge_button_centre)
@@ -92,7 +108,8 @@ async def run() -> None:
     screen = pygame.display.set_mode((TUNING.screen_width, TUNING.screen_height))
     pygame.display.set_caption("Planet Protectors")
     clock = pygame.time.Clock()
-    font = pygame.font.Font(None, 56)
+    font = pygame.font.Font(None, TUNING.label_font_size)
+    message_font = pygame.font.Font(None, TUNING.message_font_size)
 
     fight = BossFight()
 
@@ -105,7 +122,7 @@ async def run() -> None:
                 handle_click(fight, event.pos)
 
         fight.tick(clock.get_time() / 1000)
-        draw_fight(screen, fight, font=font)
+        draw_fight(screen, fight, font=font, message_font=message_font)
         pygame.display.flip()
 
         clock.tick(TUNING.frames_per_second)
