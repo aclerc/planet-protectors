@@ -181,7 +181,7 @@ async def run() -> None:
                 if started:
                     handle_click(fight, event.pos)
                 started = True
-            elif event.type == pygame.KEYDOWN:
+            elif event.type == pygame.KEYDOWN and started:
                 handle_key(fight, event.key)
 
         if started:

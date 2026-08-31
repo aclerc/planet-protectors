@@ -2,9 +2,11 @@ import pygame
 import pytest
 
 from planet_protectors.app import (
+    INSTRUCTIONS,
     dodge_button_rect,
     draw_centred_text,
     draw_fight,
+    draw_instructions,
     draw_message,
     handle_click,
     handle_key,
