@@ -1,7 +1,15 @@
 import pygame
 import pytest
 
-from planet_protectors.app import draw_centred_text, draw_fight, draw_message, handle_click, steering_direction
+from planet_protectors.app import (
+    dodge_button_rect,
+    draw_centred_text,
+    draw_fight,
+    draw_message,
+    handle_click,
+    handle_key,
+    steering_direction,
+)
 from planet_protectors.bossfight import BossFight, FightState
 from planet_protectors.tuning import TUNING, Colour
 from tests.pixels import colour_at
@@ -128,10 +136,29 @@ class TestDrawMessage:
         surface = pygame.Surface((600, 200))
         surface.fill(TUNING.pina_colour)
 
-        draw_message(surface, "Ouch! Try again, Pina!", font=pygame.font.Font(None, 56), centre=(300, 100))
+        draw_message(surface, ["Ouch! Try again, Pina!"], font=pygame.font.Font(None, 56), centre=(300, 100))
 
         just_inside_the_card = [(300, 78), (300, 122), (170, 100), (430, 100)]
         assert [colour_at(surface, point) for point in just_inside_the_card] == [TUNING.sky_colour] * 4
+
+    @staticmethod
+    def test_a_second_line_is_written_below_the_first() -> None:
+        """The pause screen needs two lines: what has happened, and how to undo it.
+
+        Drawing only the first would leave a player looking at "Paused" with no way of
+        knowing which key brings the fight back, and nothing else would complain.
+        """
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.message_font_size)
+        surface = pygame.Surface((600, 300))
+        surface.fill(TUNING.pina_colour)
+
+        draw_message(surface, ["Paused", "Press BACKSPACE to play on"], font=font, centre=(300, 150))
+
+        # The middle of the second line, which is further down than one centred line reaches.
+        second_line = 150 + TUNING.message_line_spacing // 2
+        across_the_card = [colour_at(surface, (x, second_line)) for x in range(200, 400)]
+        assert TUNING.text_colour in across_the_card
 
 
 class TestDrawFight:
@@ -188,6 +215,63 @@ class TestDrawFight:
         assert frames[0] != frames[1]
 
 
+class TestDrawTheDodgeButton:
+    @staticmethod
+    def test_the_dodge_label_is_dark_against_its_yellow_button() -> None:
+        """The messages are white for the dark sky behind them; the button is pale yellow.
+
+        White on that yellow is faint enough to lose in a bright room, so the button keeps
+        its own dark label rather than sharing the colour the messages use.
+        """
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+
+        draw_fight(
+            surface,
+            BossFight(dodge_window_left=TUNING.dodge_window_seconds),
+            font=font,
+            message_font=font,
+        )
+
+        button = dodge_button_rect()
+        across_the_label = [colour_at(surface, (x, button.centery)) for x in range(button.left, button.right)]
+        assert TUNING.dodge_text_colour in across_the_label
+        assert contrast(TUNING.dodge_text_colour, TUNING.dodge_colour) >= LEGIBLE_CONTRAST
+
+
+class TestDrawingAPausedFight:
+    @staticmethod
+    def test_the_pause_message_is_shown_while_paused() -> None:
+        """Without this the game would freeze with no explanation of why."""
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        frames = []
+        for fight in (BossFight(paused=True), BossFight()):
+            surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+            draw_fight(surface, fight, font=font, message_font=font)
+            frames.append(pygame.image.tobytes(surface, "RGB"))
+
+        assert frames[0] != frames[1]
+
+    @staticmethod
+    def test_the_pause_message_replaces_the_win_message() -> None:
+        """Both messages sit in the middle of the screen, so only one of them can show.
+
+        A won fight paused looks exactly like a running fight paused: same art, same full
+        health bars, and the pause message rather than two cards printed over each other.
+        """
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        frames = []
+        for state in (FightState.FIGHTING, FightState.WON):
+            surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+            draw_fight(surface, BossFight(paused=True, state=state), font=font, message_font=font)
+            frames.append(pygame.image.tobytes(surface, "RGB"))
+
+        assert frames[0] == frames[1]
+
+
 class TestSteeringDirection:
     @staticmethod
     def test_holding_right_steers_right() -> None:
@@ -205,3 +289,70 @@ class TestSteeringDirection:
     def test_holding_both_keys_stands_still() -> None:
         """Both arrows at once is a game of its own once you are five."""
         assert steering_direction(left_held=True, right_held=True) == 0
+
+
+class TestHandleKey:
+    @staticmethod
+    def test_pressing_p_pauses_the_fight() -> None:
+        fight = BossFight()
+
+        handle_key(fight, pygame.K_p)
+
+        assert fight.paused
+
+    @staticmethod
+    def test_pressing_backspace_unpauses_the_fight() -> None:
+        fight = BossFight(paused=True)
+
+        handle_key(fight, pygame.K_BACKSPACE)
+
+        assert not fight.paused
+
+    @staticmethod
+    def test_pressing_p_again_leaves_the_fight_paused() -> None:
+        """Only backspace unpauses, because only backspace is what the pause screen offers.
+
+        A player who presses "p" twice out of habit reads the same instruction as before,
+        rather than being dropped back into a fight they were not looking at.
+        """
+        fight = BossFight(paused=True)
+
+        handle_key(fight, pygame.K_p)
+
+        assert fight.paused
+
+    @staticmethod
+    def test_pressing_any_other_key_does_nothing() -> None:
+        fight = BossFight()
+
+        handle_key(fight, pygame.K_SPACE)
+
+        assert not fight.paused
+
+
+class TestClickingWhilePaused:
+    """The pause screen covers a live fight, so clicks through it have to be dropped."""
+
+    @staticmethod
+    def test_clicking_the_boss_while_paused_does_not_damage_it() -> None:
+        fight = BossFight(paused=True)
+
+        handle_click(fight, TUNING.boss_centre)
+
+        assert fight.boss_health == TUNING.boss_max_health
+
+    @staticmethod
+    def test_clicking_the_dodge_button_while_paused_does_not_dodge() -> None:
+        fight = BossFight(paused=True, dodge_window_left=TUNING.dodge_window_seconds)
+
+        handle_click(fight, TUNING.dodge_button_centre)
+
+        assert fight.attack_incoming
+
+    @staticmethod
+    def test_clicking_while_paused_after_winning_does_not_restart_the_fight() -> None:
+        fight = BossFight(paused=True, boss_health=0, state=FightState.WON)
+
+        handle_click(fight, EMPTY_SPACE)
+
+        assert fight.state is FightState.WON

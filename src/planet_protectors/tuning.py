@@ -15,7 +15,7 @@ class Tuning:
     """Tweakable game values."""
 
     boss_max_health: int = 100
-    pina_max_health: int = 100
+    pina_max_health: int = 50
     hit_damage: int = 1
     attack_damage: int = 2
 
@@ -33,7 +33,7 @@ class Tuning:
     trunk_colour: Colour = (146, 40, 28)
     bush_colour: Colour = (158, 36, 26)
     ink_colour: Colour = (26, 24, 26)
-    text_colour: Colour = (36, 30, 30)
+    text_colour: Colour = (255, 255, 255)
     ground_top: int = 440
 
     pina_colour: Colour = (204, 46, 32)
@@ -58,11 +58,13 @@ class Tuning:
     pina_bar_colour: Colour = (22, 140, 146)
 
     message_centre: Point = (480, 360)
+    message_line_spacing: int = 56  # gap between the lines of a message with more than one
     label_font_size: int = 56
     message_font_size: int = 40
     dodge_button_size: Point = (240, 74)
     dodge_button_centre: Point = (480, 380)
     dodge_colour: Colour = (250, 205, 90)
+    dodge_text_colour: Colour = (36, 30, 30)  # dark, because the button it sits on is pale
 
 
 TUNING = Tuning()

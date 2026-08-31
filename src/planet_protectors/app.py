@@ -6,6 +6,7 @@ This module owns everything visual; the rules it draws live in `bossfight`.
 
 import asyncio
 import math
+from collections.abc import Sequence
 
 import pygame
 
@@ -15,6 +16,7 @@ from planet_protectors.tuning import TUNING, Colour, Point
 
 BAR_BACKGROUND: Colour = (52, 44, 44)
 MESSAGE_BORDER = 4
+PAUSE_MESSAGE = ("Paused", "Press BACKSPACE to play on")
 
 
 def is_inside_circle(point: Point, *, centre: Point, radius: int) -> bool:
@@ -46,19 +48,33 @@ def draw_health_bar(surface: pygame.Surface, *, top: int, health: int, maximum: 
         pygame.draw.rect(surface, colour, filled, border_radius=TUNING.bar_height // 2)
 
 
-def draw_centred_text(surface: pygame.Surface, text: str, *, font: pygame.font.Font, centre: Point) -> None:
+def draw_centred_text(
+    surface: pygame.Surface,
+    text: str,
+    *,
+    font: pygame.font.Font,
+    centre: Point,
+    colour: Colour = TUNING.text_colour,
+) -> None:
     """Draw a line of text centred on a point."""
-    rendered = font.render(text, True, TUNING.text_colour)  # noqa: FBT003
+    rendered = font.render(text, True, colour)  # noqa: FBT003
     surface.blit(rendered, rendered.get_rect(center=centre))
 
 
-def draw_message(surface: pygame.Surface, text: str, *, font: pygame.font.Font, centre: Point) -> None:
-    """Draw a message on a card, so it can be read wherever on the planet it lands."""
-    rendered = font.render(text, True, TUNING.text_colour)  # noqa: FBT003
-    card = rendered.get_rect(center=centre).inflate(48, 36)
+def draw_message(surface: pygame.Surface, lines: Sequence[str], *, font: pygame.font.Font, centre: Point) -> None:
+    """Draw lines of text on a card, so they can be read wherever on the planet they land."""
+    rendered = [font.render(line, True, TUNING.text_colour) for line in lines]  # noqa: FBT003
+    first_line_y = centre[1] - (len(rendered) - 1) * TUNING.message_line_spacing // 2
+    rects = [
+        image.get_rect(center=(centre[0], first_line_y + index * TUNING.message_line_spacing))
+        for index, image in enumerate(rendered)
+    ]
+
+    card = rects[0].unionall(rects).inflate(48, 36)
     pygame.draw.rect(surface, TUNING.sky_colour, card, border_radius=18)
     pygame.draw.rect(surface, TUNING.ink_colour, card, MESSAGE_BORDER, border_radius=18)
-    surface.blit(rendered, rendered.get_rect(center=centre))
+    for image, rect in zip(rendered, rects, strict=True):
+        surface.blit(image, rect)
 
 
 def draw_fight(
@@ -88,17 +104,35 @@ def draw_fight(
         colour=TUNING.pina_bar_colour,
     )
 
-    if fight.state is FightState.WON:
-        draw_message(surface, "You saved the planet, Pina!", font=message_font, centre=TUNING.message_centre)
+    if fight.paused:
+        draw_message(surface, PAUSE_MESSAGE, font=message_font, centre=TUNING.message_centre)
+    elif fight.state is FightState.WON:
+        draw_message(surface, ["You saved the planet, Pina!"], font=message_font, centre=TUNING.message_centre)
     elif fight.state is FightState.LOST:
-        draw_message(surface, "Ouch! Try again, Pina!", font=message_font, centre=TUNING.message_centre)
+        draw_message(surface, ["Ouch! Try again, Pina!"], font=message_font, centre=TUNING.message_centre)
     elif fight.attack_incoming:
         pygame.draw.rect(surface, TUNING.dodge_colour, dodge_button_rect(), border_radius=16)
-        draw_centred_text(surface, "DODGE!", font=font, centre=TUNING.dodge_button_centre)
+        draw_centred_text(
+            surface,
+            "DODGE!",
+            font=font,
+            centre=TUNING.dodge_button_centre,
+            colour=TUNING.dodge_text_colour,
+        )
+
+
+def handle_key(fight: BossFight, key: int) -> None:
+    """Apply a key press to the fight: `p` pauses it, backspace lets it carry on."""
+    if key == pygame.K_p:
+        fight.pause()
+    elif key == pygame.K_BACKSPACE:
+        fight.resume()
 
 
 def handle_click(fight: BossFight, position: Point) -> None:
     """Apply a mouse click to the fight, based on where on the screen it landed."""
+    if fight.paused:
+        return
     if fight.state is FightState.WON:
         fight.restart()
     elif fight.attack_incoming and dodge_button_rect().collidepoint(position):
@@ -125,6 +159,8 @@ async def run() -> None:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 handle_click(fight, event.pos)
+            elif event.type == pygame.KEYDOWN:
+                handle_key(fight, event.key)
 
         keys = pygame.key.get_pressed()
         fight.steer_pina(steering_direction(left_held=keys[pygame.K_LEFT], right_held=keys[pygame.K_RIGHT]))
