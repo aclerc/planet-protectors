@@ -3,7 +3,7 @@
 Pina, a blob, defends seven coloured planets from invading animals. Each planet ends in a
 boss fight against a giant version of the animals invading it.
 
-A father-daughter game, playable with the mouse alone, built to run in a browser.
+A father-daughter hobby project built to run in a browser.
 
 ## Quickstart
 
