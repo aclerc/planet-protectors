@@ -1,6 +1,7 @@
 import random
+from itertools import pairwise
 
-from planet_protectors.bossfight import BossFight, FightState
+from planet_protectors.bossfight import BossFight, FightState, Tornado
 from planet_protectors.tuning import TUNING
 
 # Nudge past event boundaries so a test never depends on whether an event scheduled for
@@ -381,3 +382,156 @@ class TestPausing:
         advance(fight, TUNING.dodge_window_seconds)
 
         assert fight.dodge_window_left == left_when_paused
+
+
+class TestTornadoes:
+    """A tornado marks the ground it will land on, grows, wanders, and blows itself out."""
+
+    @staticmethod
+    def test_no_tornado_is_on_the_planet_at_the_start() -> None:
+        fight = BossFight()
+
+        assert fight.tornado is None
+
+    @staticmethod
+    def test_a_tornado_appears_after_the_gap_between_them() -> None:
+        fight = BossFight()
+
+        advance(fight, TUNING.seconds_between_tornadoes + A_MOMENT)
+
+        assert fight.tornado is not None
+
+    @staticmethod
+    def test_a_tornado_is_only_a_warning_when_it_first_appears() -> None:
+        """The orange circle has to come first, or there is nothing to get out of the way of."""
+        fight = BossFight()
+
+        advance(fight, TUNING.seconds_between_tornadoes + A_MOMENT)
+
+        assert fight.tornado is not None
+        assert not fight.tornado.landed
+
+    @staticmethod
+    def test_a_tornado_lands_once_its_warning_runs_out() -> None:
+        fight = BossFight(tornado=Tornado(x=TUNING.pina_centre[0]))
+
+        advance(fight, TUNING.tornado_warning_seconds + A_MOMENT)
+
+        assert fight.tornado is not None
+        assert fight.tornado.landed
+
+    @staticmethod
+    def test_a_warning_on_top_of_pina_does_not_hurt_her() -> None:
+        fight = BossFight(tornado=Tornado(x=TUNING.pina_centre[0]))
+
+        advance(fight, TUNING.tornado_warning_seconds - A_MOMENT)
+
+        assert fight.pina_health == TUNING.pina_max_health
+
+    @staticmethod
+    def test_a_tornado_starts_small_and_grows() -> None:
+        fight = BossFight(tornado=Tornado(x=800, seconds_to_land=0.0))
+        assert fight.tornado is not None
+        started_at = fight.tornado.radius
+
+        advance(fight, TUNING.tornado_life_seconds / 2)
+
+        assert fight.tornado is not None
+        assert started_at == TUNING.tornado_start_radius
+        assert fight.tornado.radius > started_at
+
+    @staticmethod
+    def test_a_tornado_blows_itself_out_within_its_five_seconds() -> None:
+        fight = BossFight(tornado=Tornado(x=800, seconds_to_land=0.0))
+
+        advance(fight, TUNING.tornado_life_seconds + A_MOMENT)
+
+        assert fight.tornado is None
+
+    @staticmethod
+    def test_another_tornado_follows_the_one_that_blew_out() -> None:
+        fight = BossFight(tornado=Tornado(x=800, seconds_to_land=0.0))
+        advance(fight, TUNING.tornado_life_seconds + A_MOMENT)
+        assert fight.tornado is None
+
+        advance(fight, TUNING.seconds_between_tornadoes + A_MOMENT)
+
+        assert fight.tornado is not None
+
+    @staticmethod
+    def test_a_tornado_wanders_both_ways_across_the_planet() -> None:
+        """It drifts on its own rather than chasing Pina, so walking away always works."""
+        fight = BossFight(tornado=Tornado(x=480, seconds_to_land=0.0), rng=random.Random(7))
+        assert fight.tornado is not None
+        columns = []
+        for _ in range(round(TUNING.tornado_life_seconds / A_FRAME) - 1):
+            fight.tick(A_FRAME)
+            assert fight.tornado is not None
+            columns.append(fight.tornado.x)
+
+        steps = [later - earlier for earlier, later in pairwise(columns)]
+        assert any(step > 0 for step in steps)
+        assert any(step < 0 for step in steps)
+
+    @staticmethod
+    def test_a_tornado_stays_on_the_screen() -> None:
+        fight = BossFight(tornado=Tornado(x=TUNING.tornado_roam_margin, seconds_to_land=0.0), rng=random.Random(3))
+
+        for _ in range(round(TUNING.tornado_life_seconds / A_FRAME) - 1):
+            fight.tick(A_FRAME)
+            assert fight.tornado is not None
+            assert 0 <= fight.tornado.x <= TUNING.screen_width
+
+    @staticmethod
+    def test_a_tornado_hurts_pina_when_it_touches_her() -> None:
+        fight = BossFight(tornado=Tornado(x=TUNING.pina_centre[0], seconds_to_land=0.0))
+
+        advance(fight, A_MOMENT)
+
+        assert fight.pina_health == TUNING.pina_max_health - TUNING.tornado_damage
+
+    @staticmethod
+    def test_a_tornado_that_has_hit_pina_cannot_hurt_her_again() -> None:
+        """One hit per tornado, so a tornado that parks on Pina cannot finish the fight on its own."""
+        fight = BossFight(tornado=Tornado(x=TUNING.pina_centre[0], seconds_to_land=0.0))
+
+        advance(fight, TUNING.tornado_life_seconds - A_MOMENT)
+
+        assert fight.pina_health == TUNING.pina_max_health - TUNING.tornado_damage
+
+    @staticmethod
+    def test_a_tornado_across_the_planet_leaves_pina_alone() -> None:
+        fight = BossFight(tornado=Tornado(x=TUNING.screen_width - TUNING.tornado_roam_margin, seconds_to_land=0.0))
+
+        advance(fight, A_MOMENT)
+
+        assert fight.pina_health == TUNING.pina_max_health
+
+    @staticmethod
+    def test_walking_out_of_the_way_saves_pina() -> None:
+        fight = BossFight(tornado=Tornado(x=TUNING.pina_centre[0] + 200, seconds_to_land=0.0, drift=-1))
+        fight.steer_pina(-1)
+
+        advance(fight, A_FRAME)
+
+        assert fight.pina_health == TUNING.pina_max_health
+
+    @staticmethod
+    def test_a_tornado_holds_still_while_the_fight_is_paused() -> None:
+        fight = BossFight(tornado=Tornado(x=800, seconds_to_land=0.0))
+        assert fight.tornado is not None
+        held_at = (fight.tornado.x, fight.tornado.radius)
+
+        fight.pause()
+        advance(fight, TUNING.tornado_life_seconds + A_MOMENT)
+
+        assert fight.tornado is not None
+        assert (fight.tornado.x, fight.tornado.radius) == held_at
+
+    @staticmethod
+    def test_restarting_blows_the_tornado_away() -> None:
+        fight = BossFight(tornado=Tornado(x=800, seconds_to_land=0.0))
+
+        fight.restart()
+
+        assert fight.tornado is None

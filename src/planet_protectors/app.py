@@ -17,6 +17,14 @@ from planet_protectors.tuning import TUNING, Colour, Point
 BAR_BACKGROUND: Colour = (52, 44, 44)
 MESSAGE_BORDER = 4
 PAUSE_MESSAGE = ("Paused", "Press BACKSPACE to play on")
+INSTRUCTIONS = (
+    "How to play",
+    "Arrow keys walk Pina left and right",
+    "Click the raccoon to hit it",
+    "Click DODGE, and walk away from tornadoes",
+    "P pauses, BACKSPACE plays on",
+    "Click to start!",
+)
 
 
 def is_inside_circle(point: Point, *, centre: Point, radius: int) -> bool:
@@ -88,6 +96,11 @@ def draw_fight(
     art.draw_background(surface)
     art.draw_boss(surface, centre=fight.boss_centre)
     art.draw_pina(surface, centre=fight.pina_centre)
+    if fight.tornado is not None:
+        if fight.tornado.landed:
+            art.draw_tornado(surface, tip=fight.tornado.tip, radius=fight.tornado.radius)
+        else:
+            art.draw_tornado_warning(surface, tip=fight.tornado.tip)
 
     draw_health_bar(
         surface,
@@ -119,6 +132,12 @@ def draw_fight(
             centre=TUNING.dodge_button_centre,
             colour=TUNING.dodge_text_colour,
         )
+
+
+def draw_instructions(surface: pygame.Surface, *, font: pygame.font.Font) -> None:
+    """Draw the how-to-play card the game opens on."""
+    art.draw_background(surface)
+    draw_message(surface, INSTRUCTIONS, font=font, centre=(TUNING.screen_width // 2, TUNING.screen_height // 2))
 
 
 def handle_key(fight: BossFight, key: int) -> None:
@@ -153,20 +172,25 @@ async def run() -> None:
     fight = BossFight()
 
     running = True
+    started = False
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                handle_click(fight, event.pos)
+                if started:
+                    handle_click(fight, event.pos)
+                started = True
             elif event.type == pygame.KEYDOWN:
                 handle_key(fight, event.key)
 
-        keys = pygame.key.get_pressed()
-        fight.steer_pina(steering_direction(left_held=keys[pygame.K_LEFT], right_held=keys[pygame.K_RIGHT]))
-
-        fight.tick(clock.get_time() / 1000)
-        draw_fight(screen, fight, font=font, message_font=message_font)
+        if started:
+            keys = pygame.key.get_pressed()
+            fight.steer_pina(steering_direction(left_held=keys[pygame.K_LEFT], right_held=keys[pygame.K_RIGHT]))
+            fight.tick(clock.get_time() / 1000)
+            draw_fight(screen, fight, font=font, message_font=message_font)
+        else:
+            draw_instructions(screen, font=message_font)
         pygame.display.flip()
 
         clock.tick(TUNING.frames_per_second)

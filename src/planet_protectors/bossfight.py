@@ -21,6 +21,34 @@ class FightState(Enum):
 
 
 @dataclass
+class Tornado:
+    """One tornado: an orange circle warning where it will land, then a funnel that grows."""
+
+    x: float
+    seconds_to_land: float = TUNING.tornado_warning_seconds
+    seconds_left: float = TUNING.tornado_life_seconds
+    drift: int = 1
+    seconds_to_turn: float = TUNING.tornado_turn_seconds
+    has_hit: bool = False
+
+    @property
+    def landed(self) -> bool:
+        """Whether it has touched down; until then it is only the orange warning circle."""
+        return self.seconds_to_land <= 0
+
+    @property
+    def radius(self) -> int:
+        """Half the width of the funnel, growing from small to full size over its life."""
+        grown = 1 - self.seconds_left / TUNING.tornado_life_seconds
+        return round(TUNING.tornado_start_radius + grown * (TUNING.tornado_full_radius - TUNING.tornado_start_radius))
+
+    @property
+    def tip(self) -> Point:
+        """Where the point of the funnel touches the ground."""
+        return (round(self.x), TUNING.ground_top)
+
+
+@dataclass
 class BossFight:
     """One boss fight: click the boss to damage it, dodge the attacks it sends back."""
 
@@ -36,6 +64,8 @@ class BossFight:
     boss_target: Point = TUNING.boss_centre
     pina_x: float = TUNING.pina_centre[0]
     pina_direction: int = 0
+    tornado: Tornado | None = None
+    seconds_to_next_tornado: float = TUNING.seconds_between_tornadoes
     rng: random.Random = field(default_factory=random.Random)
 
     @property
@@ -97,6 +127,7 @@ class BossFight:
 
         self._drift(dt)
         self._walk(dt)
+        self._blow(dt)
 
         if self.attack_incoming:
             self.dodge_window_left -= dt
@@ -122,6 +153,8 @@ class BossFight:
         self.boss_target = TUNING.boss_centre
         self.pina_x = TUNING.pina_centre[0]
         self.pina_direction = 0
+        self.tornado = None
+        self.seconds_to_next_tornado = TUNING.seconds_between_tornadoes
 
     def _drift(self, dt: float) -> None:
         step = TUNING.boss_speed * dt
@@ -138,6 +171,48 @@ class BossFight:
         walked = self.pina_x + self.pina_direction * TUNING.pina_speed * dt
         self.pina_x = min(max(walked, TUNING.pina_roam_margin), TUNING.screen_width - TUNING.pina_roam_margin)
 
+    def _blow(self, dt: float) -> None:
+        """Bring on the next tornado, or age the one already on the planet."""
+        if self.tornado is None:
+            self.seconds_to_next_tornado -= dt
+            if self.seconds_to_next_tornado <= 0:
+                self.tornado = Tornado(x=self._somewhere_to_land())
+            return
+
+        if not self.tornado.landed:
+            self.tornado.seconds_to_land -= dt
+            return
+
+        self.tornado.seconds_left -= dt
+        if self.tornado.seconds_left <= 0:
+            self.tornado = None
+            self.seconds_to_next_tornado = TUNING.seconds_between_tornadoes
+            return
+
+        self._wander(self.tornado, dt)
+        self._blow_pina_over(self.tornado)
+
+    def _wander(self, tornado: Tornado, dt: float) -> None:
+        tornado.seconds_to_turn -= dt
+        if tornado.seconds_to_turn <= 0:
+            tornado.seconds_to_turn = TUNING.tornado_turn_seconds
+            tornado.drift = self.rng.choice((-1, 1))
+        blown = tornado.x + tornado.drift * TUNING.tornado_speed * dt
+        tornado.x = min(
+            max(blown, TUNING.tornado_roam_margin),
+            TUNING.screen_width - TUNING.tornado_roam_margin,
+        )
+
+    def _blow_pina_over(self, tornado: Tornado) -> None:
+        """Take health off Pina if the funnel has reached her, once per tornado."""
+        if tornado.has_hit or abs(tornado.x - self.pina_x) >= tornado.radius + TUNING.pina_radius:
+            return
+        tornado.has_hit = True
+        self._take_hit(damage=TUNING.tornado_damage)
+
+    def _somewhere_to_land(self) -> int:
+        return self.rng.randint(TUNING.tornado_roam_margin, TUNING.screen_width - TUNING.tornado_roam_margin)
+
     def _somewhere_to_drift_to(self) -> Point:
         margin_x, margin_y = TUNING.boss_roam_margin
         return (
@@ -145,8 +220,8 @@ class BossFight:
             self.rng.randint(margin_y, TUNING.screen_height - margin_y),
         )
 
-    def _take_hit(self) -> None:
-        self.pina_health = max(0, self.pina_health - TUNING.attack_damage)
+    def _take_hit(self, *, damage: int = TUNING.attack_damage) -> None:
+        self.pina_health = max(0, self.pina_health - damage)
         if self.pina_health == 0:
             self.state = FightState.LOST
             self.seconds_to_retry = TUNING.retry_delay_seconds

@@ -10,7 +10,7 @@ from planet_protectors.app import (
     handle_key,
     steering_direction,
 )
-from planet_protectors.bossfight import BossFight, FightState
+from planet_protectors.bossfight import BossFight, FightState, Tornado
 from planet_protectors.tuning import TUNING, Colour
 from tests.pixels import colour_at
 
@@ -29,6 +29,10 @@ UNPAINTED: Colour = (255, 0, 255)
 # How far apart two colours must be, summed across red, green, and blue, to be told apart
 # on a screen in a bright room. Pale grey on white scores about 25; black on white, 700.
 LEGIBLE_CONTRAST = 200
+
+# Pixels are sampled on a grid rather than one by one; a stride this size cannot step over
+# any part of the art, and keeps a whole-screen sweep quick.
+SWEEP_STRIDE = 4
 
 
 def contrast(first: Colour, second: Colour) -> int:
@@ -238,6 +242,119 @@ class TestDrawTheDodgeButton:
         across_the_label = [colour_at(surface, (x, button.centery)) for x in range(button.left, button.right)]
         assert TUNING.dodge_text_colour in across_the_label
         assert contrast(TUNING.dodge_text_colour, TUNING.dodge_colour) >= LEGIBLE_CONTRAST
+
+
+class TestDrawInstructions:
+    """The screen the game opens on, which is the only place the controls are written down."""
+
+    @staticmethod
+    def test_it_says_how_to_do_every_thing_the_player_can_do() -> None:
+        """A control missing from here is a control nobody will find; the game teaches nothing else."""
+        written = " ".join(INSTRUCTIONS).upper()
+
+        assert "ARROW" in written
+        assert "CLICK" in written
+        assert "DODGE" in written
+        assert "TORNADO" in written
+        assert "P" in written
+        assert "BACKSPACE" in written
+
+    @staticmethod
+    def test_it_is_drawn_on_a_card_over_the_planet() -> None:
+        pygame.font.init()
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+        surface.fill(UNPAINTED)
+
+        draw_instructions(surface, font=pygame.font.Font(None, TUNING.message_font_size))
+
+        swept = [
+            colour_at(surface, (x, y))
+            for x in range(0, TUNING.screen_width, SWEEP_STRIDE)
+            for y in range(0, TUNING.screen_height, SWEEP_STRIDE)
+        ]
+        assert UNPAINTED not in swept
+        assert TUNING.text_colour in swept
+
+    @staticmethod
+    def test_every_line_of_it_fits_on_the_screen() -> None:
+        """Six lines of text at message size is close enough to the screen edges to be worth pinning."""
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.message_font_size)
+
+        widest = max(font.size(line)[0] for line in INSTRUCTIONS)
+        tall = len(INSTRUCTIONS) * TUNING.message_line_spacing
+
+        assert widest < TUNING.screen_width
+        assert tall < TUNING.screen_height
+
+
+class TestDrawingTornadoes:
+    @staticmethod
+    def test_the_warning_circle_is_drawn_where_a_tornado_will_land() -> None:
+        """The circle is the only warning there is, so a frame without it is a frame that lies."""
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+
+        draw_fight(surface, BossFight(tornado=Tornado(x=700)), font=font, message_font=font)
+
+        assert colour_at(surface, (700, TUNING.ground_top)) == TUNING.tornado_warning_colour
+
+    @staticmethod
+    def test_the_funnel_is_drawn_once_the_tornado_has_landed() -> None:
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+
+        draw_fight(
+            surface,
+            BossFight(tornado=Tornado(x=700, seconds_to_land=0.0)),
+            font=font,
+            message_font=font,
+        )
+
+        above_the_ground = {
+            colour_at(surface, (x, y))
+            for x in range(660, 740, 2)
+            for y in range(TUNING.ground_top - 60, TUNING.ground_top, 2)
+        }
+        assert above_the_ground & set(TUNING.tornado_colours)
+
+    @staticmethod
+    def test_the_warning_circle_goes_once_the_tornado_has_landed() -> None:
+        """Leaving it behind would mark ground that is no longer the ground to avoid."""
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+
+        draw_fight(
+            surface,
+            BossFight(tornado=Tornado(x=700, seconds_to_land=0.0)),
+            font=font,
+            message_font=font,
+        )
+
+        swept = [
+            colour_at(surface, (x, y))
+            for x in range(600, 800, 4)
+            for y in range(TUNING.ground_top - 40, TUNING.ground_top + 40, 4)
+        ]
+        assert TUNING.tornado_warning_colour not in swept
+
+    @staticmethod
+    def test_a_frame_without_a_tornado_has_no_funnel_on_it() -> None:
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+
+        draw_fight(surface, BossFight(), font=font, message_font=font)
+
+        swept = {
+            colour_at(surface, (x, y))
+            for x in range(0, TUNING.screen_width, SWEEP_STRIDE)
+            for y in range(0, TUNING.screen_height, SWEEP_STRIDE)
+        }
+        assert not swept & {*TUNING.tornado_colours, TUNING.tornado_warning_colour}
 
 
 class TestDrawingAPausedFight:
