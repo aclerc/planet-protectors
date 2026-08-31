@@ -16,8 +16,8 @@ class Tuning:
 
     boss_max_health: int = 100
     pina_max_health: int = 100
-    hit_damage: int = 10
-    attack_damage: int = 20
+    hit_damage: int = 1
+    attack_damage: int = 2
 
     seconds_between_attacks: float = 3.0
     dodge_window_seconds: float = 2.0
@@ -27,7 +27,7 @@ class Tuning:
     screen_height: int = 540
     frames_per_second: int = 60
 
-    sky_colour: Colour = (236, 234, 230)
+    sky_colour: Colour = (50, 91, 117)
     ground_colour: Colour = (183, 40, 28)
     tree_colour: Colour = (198, 54, 38)
     trunk_colour: Colour = (146, 40, 28)
@@ -40,11 +40,15 @@ class Tuning:
     teal_colour: Colour = (22, 140, 146)
     pina_radius: int = 50
     pina_centre: Point = (200, 350)
+    pina_speed: float = 300.0
+    pina_roam_margin: int = 100  # inset from each side edge that keeps his hands on screen
 
     boss_colour: Colour = (146, 148, 152)
     boss_shade_colour: Colour = (108, 110, 116)
     boss_radius: int = 95
     boss_centre: Point = (700, 200)
+    boss_speed: float = 120.0
+    boss_roam_margin: Point = (95, 125)  # inset from each edge that keeps ears and feet on screen
 
     bar_height: int = 26
     bar_margin: int = 40

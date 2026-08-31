@@ -22,6 +22,11 @@ def is_inside_circle(point: Point, *, centre: Point, radius: int) -> bool:
     return math.dist(point, centre) <= radius
 
 
+def steering_direction(*, left_held: bool, right_held: bool) -> int:
+    """Return the way the arrow keys are walking Pina, with both keys cancelling out."""
+    return int(right_held) - int(left_held)
+
+
 def dodge_button_rect() -> pygame.Rect:
     """Return the area the player clicks to dodge an incoming attack."""
     rect = pygame.Rect((0, 0), TUNING.dodge_button_size)
@@ -65,8 +70,8 @@ def draw_fight(
 ) -> None:
     """Draw the whole fight: the blobs, both health bars, and whatever prompt is showing."""
     art.draw_background(surface)
-    art.draw_boss(surface, centre=TUNING.boss_centre)
-    art.draw_pina(surface, centre=TUNING.pina_centre)
+    art.draw_boss(surface, centre=fight.boss_centre)
+    art.draw_pina(surface, centre=fight.pina_centre)
 
     draw_health_bar(
         surface,
@@ -98,7 +103,7 @@ def handle_click(fight: BossFight, position: Point) -> None:
         fight.restart()
     elif fight.attack_incoming and dodge_button_rect().collidepoint(position):
         fight.dodge()
-    elif is_inside_circle(position, centre=TUNING.boss_centre, radius=TUNING.boss_radius):
+    elif is_inside_circle(position, centre=fight.boss_centre, radius=TUNING.boss_radius):
         fight.hit_boss()
 
 
@@ -120,6 +125,9 @@ async def run() -> None:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 handle_click(fight, event.pos)
+
+        keys = pygame.key.get_pressed()
+        fight.steer_pina(steering_direction(left_held=keys[pygame.K_LEFT], right_held=keys[pygame.K_RIGHT]))
 
         fight.tick(clock.get_time() / 1000)
         draw_fight(screen, fight, font=font, message_font=message_font)

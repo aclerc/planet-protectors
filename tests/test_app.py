@@ -1,12 +1,19 @@
 import pygame
 import pytest
 
-from planet_protectors.app import draw_centred_text, draw_fight, draw_message, handle_click
+from planet_protectors.app import draw_centred_text, draw_fight, draw_message, handle_click, steering_direction
 from planet_protectors.bossfight import BossFight, FightState
 from planet_protectors.tuning import TUNING, Colour
 from tests.pixels import colour_at
 
 EMPTY_SPACE = (40, 250)
+
+# Somewhere the boss can drift to, far enough from where it starts that a click on one is
+# nowhere near the other.
+DRIFTED_TO = (300, 300)
+
+# Somewhere along the ground Pina can walk to, well away from where he starts.
+WALKED_TO = 620
 
 # A colour that appears nowhere in the game, so "still this colour" means "never painted".
 UNPAINTED: Colour = (255, 0, 255)
@@ -63,6 +70,22 @@ class TestHandleClick:
 
         assert fight.boss_health == TUNING.boss_max_health - TUNING.hit_damage
         assert fight.attack_incoming
+
+    @staticmethod
+    def test_clicking_the_boss_where_it_has_drifted_to_damages_it() -> None:
+        fight = BossFight(boss_x=DRIFTED_TO[0], boss_y=DRIFTED_TO[1])
+
+        handle_click(fight, DRIFTED_TO)
+
+        assert fight.boss_health == TUNING.boss_max_health - TUNING.hit_damage
+
+    @staticmethod
+    def test_clicking_where_the_boss_began_misses_once_it_has_drifted_away() -> None:
+        fight = BossFight(boss_x=DRIFTED_TO[0], boss_y=DRIFTED_TO[1])
+
+        handle_click(fight, TUNING.boss_centre)
+
+        assert fight.boss_health == TUNING.boss_max_health
 
     @staticmethod
     def test_clicking_after_winning_starts_the_fight_again() -> None:
@@ -133,3 +156,52 @@ class TestDrawFight:
             for y in range(0, TUNING.screen_height, 4)
         ]
         assert UNPAINTED not in swept
+
+    @staticmethod
+    def test_the_boss_is_drawn_where_it_has_drifted_to() -> None:
+        """The frame has to follow the boss's live position, not the tuning constant.
+
+        Drawing it at the constant leaves a boss painted where it no longer is: the
+        clicking still works, it just lands on empty planet.
+        """
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        frames = []
+        for fight in (BossFight(boss_x=DRIFTED_TO[0], boss_y=DRIFTED_TO[1]), BossFight()):
+            surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+            draw_fight(surface, fight, font=font, message_font=font)
+            frames.append(pygame.image.tobytes(surface, "RGB"))
+
+        assert frames[0] != frames[1]
+
+    @staticmethod
+    def test_pina_is_drawn_where_he_has_walked_to() -> None:
+        """The same trap as the boss: drawing Pina at the tuning constant leaves him behind."""
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        frames = []
+        for fight in (BossFight(pina_x=WALKED_TO), BossFight()):
+            surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+            draw_fight(surface, fight, font=font, message_font=font)
+            frames.append(pygame.image.tobytes(surface, "RGB"))
+
+        assert frames[0] != frames[1]
+
+
+class TestSteeringDirection:
+    @staticmethod
+    def test_holding_right_steers_right() -> None:
+        assert steering_direction(left_held=False, right_held=True) == 1
+
+    @staticmethod
+    def test_holding_left_steers_left() -> None:
+        assert steering_direction(left_held=True, right_held=False) == -1
+
+    @staticmethod
+    def test_holding_neither_key_stands_still() -> None:
+        assert steering_direction(left_held=False, right_held=False) == 0
+
+    @staticmethod
+    def test_holding_both_keys_stands_still() -> None:
+        """Both arrows at once is a game of its own once you are five."""
+        assert steering_direction(left_held=True, right_held=True) == 0
