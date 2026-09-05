@@ -15,8 +15,11 @@ from planet_protectors.bossfight import BossFight, FightState
 from planet_protectors.tuning import TUNING, Colour, Point
 
 BAR_BACKGROUND: Colour = (52, 44, 44)
+BOSS_NAME = "Windshield"
+PINA_NAME = "Pina"
 MESSAGE_BORDER = 4
 PAUSE_MESSAGE = ("Paused", "Press BACKSPACE to play on")
+WIN_MESSAGE = ("You saved the planet, Pina!", "Press R to play again")
 INSTRUCTIONS = (
     "How to play",
     "Arrow keys walk Pina left and right",
@@ -42,6 +45,11 @@ def dodge_button_rect() -> pygame.Rect:
     rect = pygame.Rect((0, 0), TUNING.dodge_button_size)
     rect.center = TUNING.dodge_button_centre
     return rect
+
+
+def health_bar_centre(top: int) -> Point:
+    """Return the middle of a health bar, where its name is written."""
+    return (TUNING.screen_width // 2, top + TUNING.bar_height // 2)
 
 
 def draw_health_bar(surface: pygame.Surface, *, top: int, health: int, maximum: int, colour: Colour) -> None:
@@ -91,6 +99,7 @@ def draw_fight(
     *,
     font: pygame.font.Font,
     message_font: pygame.font.Font,
+    bar_font: pygame.font.Font,
 ) -> None:
     """Draw the whole fight: the blobs, both health bars, and whatever prompt is showing."""
     art.draw_background(surface)
@@ -109,6 +118,7 @@ def draw_fight(
         maximum=TUNING.boss_max_health,
         colour=TUNING.boss_bar_colour,
     )
+    draw_centred_text(surface, BOSS_NAME, font=bar_font, centre=health_bar_centre(TUNING.boss_bar_top))
     draw_health_bar(
         surface,
         top=TUNING.pina_bar_top,
@@ -116,11 +126,12 @@ def draw_fight(
         maximum=TUNING.pina_max_health,
         colour=TUNING.pina_bar_colour,
     )
+    draw_centred_text(surface, PINA_NAME, font=bar_font, centre=health_bar_centre(TUNING.pina_bar_top))
 
     if fight.paused:
         draw_message(surface, PAUSE_MESSAGE, font=message_font, centre=TUNING.message_centre)
     elif fight.state is FightState.WON:
-        draw_message(surface, ["You saved the planet, Pina!"], font=message_font, centre=TUNING.message_centre)
+        draw_message(surface, WIN_MESSAGE, font=message_font, centre=TUNING.message_centre)
     elif fight.state is FightState.LOST:
         draw_message(surface, ["Ouch! Try again, Pina!"], font=message_font, centre=TUNING.message_centre)
     elif fight.attack_incoming:
@@ -141,20 +152,20 @@ def draw_instructions(surface: pygame.Surface, *, font: pygame.font.Font) -> Non
 
 
 def handle_key(fight: BossFight, key: int) -> None:
-    """Apply a key press to the fight: `p` pauses it, backspace lets it carry on."""
+    """Apply a key press: `p` pauses, backspace carries on, `r` replays a won fight."""
     if key == pygame.K_p:
         fight.pause()
     elif key == pygame.K_BACKSPACE:
         fight.resume()
+    elif key == pygame.K_r and not fight.paused and fight.state is FightState.WON:
+        fight.restart()
 
 
 def handle_click(fight: BossFight, position: Point) -> None:
     """Apply a mouse click to the fight, based on where on the screen it landed."""
     if fight.paused:
         return
-    if fight.state is FightState.WON:
-        fight.restart()
-    elif fight.attack_incoming and dodge_button_rect().collidepoint(position):
+    if fight.attack_incoming and dodge_button_rect().collidepoint(position):
         fight.dodge()
     elif is_inside_circle(position, centre=fight.boss_centre, radius=TUNING.boss_radius):
         fight.hit_boss()
@@ -168,6 +179,7 @@ async def run() -> None:
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, TUNING.label_font_size)
     message_font = pygame.font.Font(None, TUNING.message_font_size)
+    bar_font = pygame.font.Font(None, TUNING.bar_font_size)
 
     fight = BossFight()
 
@@ -188,7 +200,7 @@ async def run() -> None:
             keys = pygame.key.get_pressed()
             fight.steer_pina(steering_direction(left_held=keys[pygame.K_LEFT], right_held=keys[pygame.K_RIGHT]))
             fight.tick(clock.get_time() / 1000)
-            draw_fight(screen, fight, font=font, message_font=message_font)
+            draw_fight(screen, fight, font=font, message_font=message_font, bar_font=bar_font)
         else:
             draw_instructions(screen, font=message_font)
         pygame.display.flip()

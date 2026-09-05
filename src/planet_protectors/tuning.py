@@ -80,6 +80,7 @@ class Tuning:
     message_centre: Point = (480, 360)
     message_line_spacing: int = 56  # gap between the lines of a message with more than one
     label_font_size: int = 56
+    bar_font_size: int = 24  # small enough that a name sits inside a bar
     message_font_size: int = 40
     dodge_button_size: Point = (240, 74)
     dodge_button_centre: Point = (480, 380)

@@ -2,7 +2,10 @@ import pygame
 import pytest
 
 from planet_protectors.app import (
+    BOSS_NAME,
     INSTRUCTIONS,
+    PINA_NAME,
+    WIN_MESSAGE,
     dodge_button_rect,
     draw_centred_text,
     draw_fight,
@@ -102,13 +105,13 @@ class TestHandleClick:
         assert fight.boss_health == TUNING.boss_max_health
 
     @staticmethod
-    def test_clicking_after_winning_starts_the_fight_again() -> None:
+    def test_clicking_after_winning_does_not_start_the_fight_again() -> None:
+        """A win is worth looking at; a stray click should not wipe it off the screen."""
         fight = BossFight(boss_health=0, state=FightState.WON)
 
         handle_click(fight, EMPTY_SPACE)
 
-        assert fight.state is FightState.FIGHTING
-        assert fight.boss_health == TUNING.boss_max_health
+        assert fight.state is FightState.WON
 
 
 class TestDrawCentredText:
@@ -181,7 +184,7 @@ class TestDrawFight:
         surface.fill(UNPAINTED)
         font = pygame.font.Font(None, TUNING.label_font_size)
 
-        draw_fight(surface, BossFight(state=state), font=font, message_font=font)
+        draw_fight(surface, BossFight(state=state), font=font, message_font=font, bar_font=font)
 
         swept = [
             colour_at(surface, (x, y))
@@ -202,7 +205,7 @@ class TestDrawFight:
         frames = []
         for fight in (BossFight(boss_x=DRIFTED_TO[0], boss_y=DRIFTED_TO[1]), BossFight()):
             surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
-            draw_fight(surface, fight, font=font, message_font=font)
+            draw_fight(surface, fight, font=font, message_font=font, bar_font=font)
             frames.append(pygame.image.tobytes(surface, "RGB"))
 
         assert frames[0] != frames[1]
@@ -215,10 +218,49 @@ class TestDrawFight:
         frames = []
         for fight in (BossFight(pina_x=WALKED_TO), BossFight()):
             surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
-            draw_fight(surface, fight, font=font, message_font=font)
+            draw_fight(surface, fight, font=font, message_font=font, bar_font=font)
             frames.append(pygame.image.tobytes(surface, "RGB"))
 
         assert frames[0] != frames[1]
+
+
+class TestNamingTheHealthBars:
+    """Two bars with nothing written on them leave a player guessing which one is theirs."""
+
+    @staticmethod
+    @pytest.mark.parametrize("top", [TUNING.boss_bar_top, TUNING.pina_bar_top])
+    def test_a_name_is_written_on_the_bar(top: int) -> None:
+        """White appears nowhere else along a bar, so white on one is the name and nothing else."""
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+
+        draw_fight(
+            surface,
+            BossFight(),
+            font=font,
+            message_font=font,
+            bar_font=pygame.font.Font(None, TUNING.bar_font_size),
+        )
+
+        along_the_bar = [
+            colour_at(surface, (x, y))
+            for x in range(TUNING.bar_margin, TUNING.screen_width - TUNING.bar_margin)
+            for y in range(top, top + TUNING.bar_height)
+        ]
+        assert TUNING.text_colour in along_the_bar
+
+    @staticmethod
+    @pytest.mark.parametrize("name", [BOSS_NAME, PINA_NAME])
+    def test_a_name_fits_inside_its_bar(name: str) -> None:
+        """A name taller than the bar spills over the sky above it and the planet below it."""
+        pygame.font.init()
+        bar_font = pygame.font.Font(None, TUNING.bar_font_size)
+
+        width, height = bar_font.size(name)
+
+        assert height <= TUNING.bar_height
+        assert width < TUNING.screen_width - 2 * TUNING.bar_margin
 
 
 class TestDrawTheDodgeButton:
@@ -238,12 +280,20 @@ class TestDrawTheDodgeButton:
             BossFight(dodge_window_left=TUNING.dodge_window_seconds),
             font=font,
             message_font=font,
+            bar_font=font,
         )
 
         button = dodge_button_rect()
         across_the_label = [colour_at(surface, (x, button.centery)) for x in range(button.left, button.right)]
         assert TUNING.dodge_text_colour in across_the_label
         assert contrast(TUNING.dodge_text_colour, TUNING.dodge_colour) >= LEGIBLE_CONTRAST
+
+
+class TestTheWinMessage:
+    @staticmethod
+    def test_it_says_which_key_plays_again() -> None:
+        """Nothing else on the win screen says how to play on; a click no longer does it."""
+        assert "R" in " ".join(WIN_MESSAGE).upper()
 
 
 class TestDrawInstructions:
@@ -298,7 +348,7 @@ class TestDrawingTornadoes:
         font = pygame.font.Font(None, TUNING.label_font_size)
         surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
 
-        draw_fight(surface, BossFight(tornado=Tornado(x=700)), font=font, message_font=font)
+        draw_fight(surface, BossFight(tornado=Tornado(x=700)), font=font, message_font=font, bar_font=font)
 
         assert colour_at(surface, (700, TUNING.ground_top)) == TUNING.tornado_warning_colour
 
@@ -313,6 +363,7 @@ class TestDrawingTornadoes:
             BossFight(tornado=Tornado(x=700, seconds_to_land=0.0)),
             font=font,
             message_font=font,
+            bar_font=font,
         )
 
         above_the_ground = {
@@ -334,6 +385,7 @@ class TestDrawingTornadoes:
             BossFight(tornado=Tornado(x=700, seconds_to_land=0.0)),
             font=font,
             message_font=font,
+            bar_font=font,
         )
 
         swept = [
@@ -349,7 +401,7 @@ class TestDrawingTornadoes:
         font = pygame.font.Font(None, TUNING.label_font_size)
         surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
 
-        draw_fight(surface, BossFight(), font=font, message_font=font)
+        draw_fight(surface, BossFight(), font=font, message_font=font, bar_font=font)
 
         swept = {
             colour_at(surface, (x, y))
@@ -368,7 +420,7 @@ class TestDrawingAPausedFight:
         frames = []
         for fight in (BossFight(paused=True), BossFight()):
             surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
-            draw_fight(surface, fight, font=font, message_font=font)
+            draw_fight(surface, fight, font=font, message_font=font, bar_font=font)
             frames.append(pygame.image.tobytes(surface, "RGB"))
 
         assert frames[0] != frames[1]
@@ -385,7 +437,7 @@ class TestDrawingAPausedFight:
         frames = []
         for state in (FightState.FIGHTING, FightState.WON):
             surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
-            draw_fight(surface, BossFight(paused=True, state=state), font=font, message_font=font)
+            draw_fight(surface, BossFight(paused=True, state=state), font=font, message_font=font, bar_font=font)
             frames.append(pygame.image.tobytes(surface, "RGB"))
 
         assert frames[0] == frames[1]
@@ -441,6 +493,33 @@ class TestHandleKey:
         assert fight.paused
 
     @staticmethod
+    def test_pressing_r_after_winning_starts_the_fight_again() -> None:
+        fight = BossFight(boss_health=0, state=FightState.WON)
+
+        handle_key(fight, pygame.K_r)
+
+        assert fight.state is FightState.FIGHTING
+        assert fight.boss_health == TUNING.boss_max_health
+
+    @staticmethod
+    def test_pressing_r_during_a_fight_does_nothing() -> None:
+        """Replaying is only offered on the win screen, so a stray "r" cannot undo a fight."""
+        fight = BossFight(boss_health=1)
+
+        handle_key(fight, pygame.K_r)
+
+        assert fight.boss_health == 1
+
+    @staticmethod
+    def test_pressing_r_while_paused_after_winning_does_not_restart_the_fight() -> None:
+        """The pause screen covers the win screen, so it is not the replay prompt being read."""
+        fight = BossFight(paused=True, boss_health=0, state=FightState.WON)
+
+        handle_key(fight, pygame.K_r)
+
+        assert fight.state is FightState.WON
+
+    @staticmethod
     def test_pressing_any_other_key_does_nothing() -> None:
         fight = BossFight()
 
@@ -467,11 +546,3 @@ class TestClickingWhilePaused:
         handle_click(fight, TUNING.dodge_button_centre)
 
         assert fight.attack_incoming
-
-    @staticmethod
-    def test_clicking_while_paused_after_winning_does_not_restart_the_fight() -> None:
-        fight = BossFight(paused=True, boss_health=0, state=FightState.WON)
-
-        handle_click(fight, EMPTY_SPACE)
-
-        assert fight.state is FightState.WON
