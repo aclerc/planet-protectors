@@ -103,7 +103,16 @@ def draw_fight(
 ) -> None:
     """Draw the whole fight: the blobs, both health bars, and whatever prompt is showing."""
     art.draw_background(surface)
-    art.draw_boss(surface, centre=fight.boss_centre)
+    if fight.state is FightState.WON:
+        art.draw_boss(
+            surface,
+            centre=fight.boss_centre,
+            colour=TUNING.boss_defeated_colour,
+            shade_colour=TUNING.boss_defeated_shade_colour,
+            opacity=fight.boss_opacity,
+        )
+    else:
+        art.draw_boss(surface, centre=fight.boss_centre)
     art.draw_pina(surface, centre=fight.pina_centre)
     if fight.tornado is not None:
         if fight.tornado.landed:
@@ -131,7 +140,8 @@ def draw_fight(
     if fight.paused:
         draw_message(surface, PAUSE_MESSAGE, font=message_font, centre=TUNING.message_centre)
     elif fight.state is FightState.WON:
-        draw_message(surface, WIN_MESSAGE, font=message_font, centre=TUNING.message_centre)
+        if fight.boss_vanished:
+            draw_message(surface, WIN_MESSAGE, font=message_font, centre=TUNING.message_centre)
     elif fight.state is FightState.LOST:
         draw_message(surface, ["Ouch! Try again, Pina!"], font=message_font, centre=TUNING.message_centre)
     elif fight.attack_incoming:

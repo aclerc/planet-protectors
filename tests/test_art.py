@@ -27,6 +27,9 @@ BOSS_REACH: Point = (110, 140)
 # any part of the art, and keeps a whole-screen sweep quick.
 SWEEP_STRIDE = 4
 
+# A box no pixel falls inside, so "painted outside it" means "painted anywhere".
+NOWHERE = pygame.Rect(0, 0, 0, 0)
+
 
 def blank_surface() -> pygame.Surface:
     """Return a screen-sized surface painted the sentinel colour."""
@@ -218,6 +221,33 @@ class TestDrawBoss:
         art.draw_boss(surface, centre=TUNING.boss_centre)
 
         assert painted_outside(surface, box=reach_box(TUNING.boss_centre, BOSS_REACH)) == []
+
+    @staticmethod
+    def test_it_is_drawn_in_whatever_colour_it_is_given() -> None:
+        """A beaten boss is drawn red, which is the whole of how a win is announced."""
+        surface = blank_surface()
+
+        art.draw_boss(surface, centre=TUNING.boss_centre, colour=TUNING.boss_defeated_colour)
+
+        assert colour_at(surface, TUNING.boss_centre) == TUNING.boss_defeated_colour
+
+    @staticmethod
+    def test_a_half_faded_boss_lets_the_planet_show_through() -> None:
+        surface = blank_surface()
+
+        art.draw_boss(surface, centre=TUNING.boss_centre, opacity=0.5)
+
+        blended = colour_at(surface, TUNING.boss_centre)
+        assert blended not in (SENTINEL, TUNING.boss_colour)
+
+    @staticmethod
+    def test_a_boss_faded_all_the_way_out_paints_nothing_at_all() -> None:
+        """Every part of the boss has to fade together; a stray leg left behind is the bug."""
+        surface = blank_surface()
+
+        art.draw_boss(surface, centre=TUNING.boss_centre, opacity=0.0)
+
+        assert painted_outside(surface, box=NOWHERE) == []
 
 
 def painted_width(surface: pygame.Surface, *, row: int) -> int:

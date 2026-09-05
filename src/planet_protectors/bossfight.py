@@ -66,6 +66,7 @@ class BossFight:
     pina_direction: int = 0
     tornado: Tornado | None = None
     seconds_to_next_tornado: float = TUNING.seconds_between_tornadoes
+    seconds_to_vanish: float = TUNING.boss_vanish_seconds
     rng: random.Random = field(default_factory=random.Random)
 
     @property
@@ -77,6 +78,16 @@ class BossFight:
     def boss_centre(self) -> Point:
         """Where the boss has drifted to, in whole pixels."""
         return (round(self.boss_x), round(self.boss_y))
+
+    @property
+    def boss_opacity(self) -> float:
+        """How solid the boss is drawn: 1 until it is beaten, sliding to 0 as it fades away."""
+        return max(0.0, self.seconds_to_vanish / TUNING.boss_vanish_seconds)
+
+    @property
+    def boss_vanished(self) -> bool:
+        """Whether the beaten boss has finished fading and left the planet."""
+        return self.state is FightState.WON and self.seconds_to_vanish <= 0
 
     @property
     def attack_incoming(self) -> bool:
@@ -122,7 +133,8 @@ class BossFight:
                 self.restart()
             return
 
-        if self.state is not FightState.FIGHTING:
+        if self.state is FightState.WON:
+            self.seconds_to_vanish = max(0.0, self.seconds_to_vanish - dt)
             return
 
         self._drift(dt)
@@ -155,6 +167,7 @@ class BossFight:
         self.pina_direction = 0
         self.tornado = None
         self.seconds_to_next_tornado = TUNING.seconds_between_tornadoes
+        self.seconds_to_vanish = TUNING.boss_vanish_seconds
 
     def _drift(self, dt: float) -> None:
         step = TUNING.boss_speed * dt

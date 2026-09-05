@@ -16,7 +16,7 @@ from planet_protectors.app import (
     steering_direction,
 )
 from planet_protectors.bossfight import BossFight, FightState, Tornado
-from planet_protectors.tuning import TUNING, Colour
+from planet_protectors.tuning import TUNING, Colour, Point
 from tests.pixels import colour_at
 
 EMPTY_SPACE = (40, 250)
@@ -40,9 +40,42 @@ LEGIBLE_CONTRAST = 200
 SWEEP_STRIDE = 4
 
 
+# The band across the middle of the screen the message cards are written in. The names on
+# the health bars are the only other white in the game, and both bars sit outside it.
+MESSAGE_BAND = pygame.Rect(0, 300, TUNING.screen_width, 120)
+
+# The box the boss and its legs stay inside, wherever it has drifted to.
+BOSS_BOX = pygame.Rect(0, 0, 220, 280)
+
+
 def contrast(first: Colour, second: Colour) -> int:
     """Return how far apart two colours are, summed across the three channels."""
     return sum(abs(one - other) for one, other in zip(first, second, strict=True))
+
+
+def message_is_showing(surface: pygame.Surface) -> bool:
+    """Return whether a message card has been written across the middle of a frame."""
+    return any(
+        colour_at(surface, (x, y)) == TUNING.text_colour
+        for x in range(MESSAGE_BAND.left, MESSAGE_BAND.right, 2)
+        for y in range(MESSAGE_BAND.top, MESSAGE_BAND.bottom, 2)
+    )
+
+
+def boss_box_at(centre: Point) -> pygame.Rect:
+    """Return the box the boss fills when it is drawn at `centre`."""
+    box = BOSS_BOX.copy()
+    box.center = centre
+    return box
+
+
+def frame_of(fight: BossFight) -> pygame.Surface:
+    """Draw one frame of a fight, the way the game draws it every tick."""
+    pygame.font.init()
+    font = pygame.font.Font(None, TUNING.label_font_size)
+    surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+    draw_fight(surface, fight, font=font, message_font=font, bar_font=font)
+    return surface
 
 
 class TestHandleClick:
@@ -289,11 +322,48 @@ class TestDrawTheDodgeButton:
         assert contrast(TUNING.dodge_text_colour, TUNING.dodge_colour) >= LEGIBLE_CONTRAST
 
 
-class TestTheWinMessage:
+class TestWinningTheFight:
+    """What the frame shows once the boss is beaten: it turns red, fades, then the card."""
+
     @staticmethod
     def test_it_says_which_key_plays_again() -> None:
         """Nothing else on the win screen says how to play on; a click no longer does it."""
         assert "R" in " ".join(WIN_MESSAGE).upper()
+
+    @staticmethod
+    def test_the_beaten_boss_is_drawn_red() -> None:
+        """Turning red is how a five-year-old sees the fight has been won."""
+        surface = frame_of(BossFight(boss_health=0, state=FightState.WON))
+
+        assert colour_at(surface, TUNING.boss_centre) == TUNING.boss_defeated_colour
+
+    @staticmethod
+    def test_the_beaten_boss_is_gone_once_it_has_faded() -> None:
+        surface = frame_of(BossFight(boss_health=0, state=FightState.WON, seconds_to_vanish=0.0))
+
+        assert colour_at(surface, TUNING.boss_centre) == TUNING.sky_colour
+
+    @staticmethod
+    def test_the_win_message_waits_until_the_beaten_boss_has_faded_away() -> None:
+        """The card sits where the boss is fading; showing it early hides the reward."""
+        surface = frame_of(BossFight(boss_health=0, state=FightState.WON))
+
+        assert not message_is_showing(surface)
+
+    @staticmethod
+    def test_the_win_message_is_shown_once_the_boss_has_gone() -> None:
+        surface = frame_of(BossFight(boss_health=0, state=FightState.WON, seconds_to_vanish=0.0))
+
+        assert message_is_showing(surface)
+
+    @staticmethod
+    def test_a_won_fight_shows_no_dodge_button() -> None:
+        """An attack can still be in the air when the winning hit lands."""
+        won = BossFight(boss_health=0, state=FightState.WON, dodge_window_left=TUNING.dodge_window_seconds)
+
+        surface = frame_of(won)
+
+        assert colour_at(surface, TUNING.dodge_button_centre) != TUNING.dodge_colour
 
 
 class TestDrawInstructions:
@@ -429,18 +499,20 @@ class TestDrawingAPausedFight:
     def test_the_pause_message_replaces_the_win_message() -> None:
         """Both messages sit in the middle of the screen, so only one of them can show.
 
-        A won fight paused looks exactly like a running fight paused: same art, same full
-        health bars, and the pause message rather than two cards printed over each other.
+        A won fight paused looks like a running fight paused everywhere but the boss, which
+        turns red the moment it is beaten: same health bars, and the pause message rather
+        than two cards printed over each other. The boss itself is left out of the sweep.
         """
-        pygame.font.init()
-        font = pygame.font.Font(None, TUNING.label_font_size)
-        frames = []
-        for state in (FightState.FIGHTING, FightState.WON):
-            surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
-            draw_fight(surface, BossFight(paused=True, state=state), font=font, message_font=font, bar_font=font)
-            frames.append(pygame.image.tobytes(surface, "RGB"))
+        frames = [frame_of(BossFight(paused=True, state=state)) for state in (FightState.FIGHTING, FightState.WON)]
 
-        assert frames[0] == frames[1]
+        around_the_boss = boss_box_at(TUNING.boss_centre)
+        differences = [
+            (x, y)
+            for x in range(0, TUNING.screen_width, SWEEP_STRIDE)
+            for y in range(0, TUNING.screen_height, SWEEP_STRIDE)
+            if not around_the_boss.collidepoint(x, y) and colour_at(frames[0], (x, y)) != colour_at(frames[1], (x, y))
+        ]
+        assert differences == []
 
 
 class TestSteeringDirection:

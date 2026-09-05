@@ -50,6 +50,9 @@ class Tuning:
 
     boss_colour: Colour = (146, 148, 152)
     boss_shade_colour: Colour = (108, 110, 116)
+    boss_defeated_colour: Colour = (240, 60, 48)  # brighter than the ground, so a beaten boss still reads against it
+    boss_defeated_shade_colour: Colour = (188, 34, 26)
+    boss_vanish_seconds: float = 4
     boss_radius: int = 95
     boss_centre: Point = (700, 200)
     boss_speed: float = 120.0

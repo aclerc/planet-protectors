@@ -55,6 +55,75 @@ class TestHittingTheBoss:
         assert fight.boss_health == 0
 
 
+class TestTheDefeatedBoss:
+    """The boss turns red and fades off the planet once it is beaten.
+
+    The fade is what tells a five-year-old the fight is over, so it is state the fight owns
+    rather than an animation the window invents: pausing freezes it like everything else.
+    """
+
+    @staticmethod
+    def test_the_boss_is_solid_while_it_is_still_fighting() -> None:
+        fight = BossFight()
+
+        advance(fight, 1.0)
+
+        assert fight.boss_opacity == 1.0
+        assert not fight.boss_vanished
+
+    @staticmethod
+    def test_the_boss_is_still_there_the_moment_it_is_beaten() -> None:
+        fight = BossFight()
+
+        fight.hit_boss(damage=TUNING.boss_max_health)
+
+        assert fight.boss_opacity == 1.0
+        assert not fight.boss_vanished
+
+    @staticmethod
+    def test_the_beaten_boss_fades_as_the_fight_carries_on_ticking() -> None:
+        fight = BossFight()
+        fight.hit_boss(damage=TUNING.boss_max_health)
+
+        advance(fight, TUNING.boss_vanish_seconds / 2)
+
+        assert 0 < fight.boss_opacity < 1
+        assert not fight.boss_vanished
+
+    @staticmethod
+    def test_the_beaten_boss_is_gone_once_it_has_finished_fading() -> None:
+        fight = BossFight()
+        fight.hit_boss(damage=TUNING.boss_max_health)
+
+        advance(fight, TUNING.boss_vanish_seconds + A_MOMENT)
+
+        assert fight.boss_opacity == 0
+        assert fight.boss_vanished
+
+    @staticmethod
+    def test_pausing_holds_the_fading_boss_where_it_is() -> None:
+        fight = BossFight()
+        fight.hit_boss(damage=TUNING.boss_max_health)
+        advance(fight, TUNING.boss_vanish_seconds / 2)
+        faded_to = fight.boss_opacity
+
+        fight.pause()
+        advance(fight, TUNING.boss_vanish_seconds)
+
+        assert fight.boss_opacity == faded_to
+
+    @staticmethod
+    def test_restarting_brings_the_boss_back() -> None:
+        fight = BossFight()
+        fight.hit_boss(damage=TUNING.boss_max_health)
+        advance(fight, TUNING.boss_vanish_seconds + A_MOMENT)
+
+        fight.restart()
+
+        assert fight.boss_opacity == 1.0
+        assert not fight.boss_vanished
+
+
 class TestBossAttacks:
     @staticmethod
     def test_no_attack_is_incoming_at_the_start() -> None:
