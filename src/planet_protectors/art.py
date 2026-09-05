@@ -12,6 +12,8 @@ from planet_protectors.tuning import TUNING, Colour, Point
 
 MARKER_WIDTH = 5
 STREAK_WIDTH = 2
+LOOP_HEIGHT = 20
+LOOP_SPACING = 9
 HIGHLIGHT_COLOUR: Colour = (232, 118, 96)
 
 
@@ -150,35 +152,51 @@ HEAD_SHAPE: tuple[Point, ...] = (
 EAR_SHAPE: tuple[Point, ...] = ((-64, -84), (-46, -114), (-26, -90))
 
 
-def draw_boss(surface: pygame.Surface, *, centre: Point) -> None:
-    """Draw the boss: a raccoon's face on two small legs."""
+def draw_boss(
+    surface: pygame.Surface,
+    *,
+    centre: Point,
+    colour: Colour = TUNING.boss_colour,
+    shade_colour: Colour = TUNING.boss_shade_colour,
+    opacity: float = 1.0,
+) -> None:
+    """Draw the boss: a raccoon's face on two small legs, in the colours and solidity given."""
+    if opacity >= 1:
+        _paint_boss(surface, centre=centre, colour=colour, shade_colour=shade_colour)
+        return
+
+    layer = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    _paint_boss(layer, centre=centre, colour=colour, shade_colour=shade_colour)
+    layer.set_alpha(round(255 * opacity))
+    surface.blit(layer, (0, 0))
+
+
+def _paint_boss(surface: pygame.Surface, *, centre: Point, colour: Colour, shade_colour: Colour) -> None:
     _draw_boss_legs(surface, centre=centre)
     for ear in (EAR_SHAPE, tuple((-dx, dy) for dx, dy in EAR_SHAPE)):
         pygame.draw.polygon(surface, TUNING.ink_colour, _polygon(centre, ear))
 
-    pygame.draw.polygon(surface, TUNING.boss_colour, _polygon(centre, HEAD_SHAPE))
+    pygame.draw.polygon(surface, colour, _polygon(centre, HEAD_SHAPE))
     for top_x, bottom_x in ((-78, -34), (-58, -22), (58, 22), (78, 34)):
         pygame.draw.line(
             surface,
-            TUNING.boss_shade_colour,
+            shade_colour,
             _offset(centre, (top_x, -72)),
             _offset(centre, (bottom_x, 40)),
             STREAK_WIDTH,
         )
-    pygame.draw.polygon(surface, TUNING.boss_shade_colour, _polygon(centre, HEAD_SHAPE), MARKER_WIDTH)
-    _draw_boss_face(surface, centre=centre)
+    pygame.draw.polygon(surface, shade_colour, _polygon(centre, HEAD_SHAPE), MARKER_WIDTH)
+    _draw_boss_face(surface, centre=centre, shade_colour=shade_colour)
 
 
-def _draw_boss_face(surface: pygame.Surface, *, centre: Point) -> None:
+def _draw_boss_face(surface: pygame.Surface, *, centre: Point, shade_colour: Colour) -> None:
     for x in (-42, 42):
         pygame.draw.ellipse(surface, TUNING.ink_colour, _ellipse(_offset(centre, (x, -25)), (46, 70)))
     for brow, tip in (((-30, -66), (-14, -48)), ((30, -66), (14, -48))):
         pygame.draw.line(surface, TUNING.ink_colour, _offset(centre, brow), _offset(centre, tip), MARKER_WIDTH)
 
     pygame.draw.ellipse(surface, TUNING.ink_colour, _ellipse(_offset(centre, (0, 46)), (26, 20)))
-    pygame.draw.line(
-        surface, TUNING.boss_shade_colour, _offset(centre, (0, 56)), _offset(centre, (0, 84)), STREAK_WIDTH
-    )
+    pygame.draw.line(surface, shade_colour, _offset(centre, (0, 56)), _offset(centre, (0, 84)), STREAK_WIDTH)
 
 
 def _draw_boss_legs(surface: pygame.Surface, *, centre: Point) -> None:
@@ -191,3 +209,22 @@ def _draw_boss_legs(surface: pygame.Surface, *, centre: Point) -> None:
             MARKER_WIDTH,
         )
         pygame.draw.circle(surface, TUNING.ink_colour, _offset(centre, foot), 9)
+
+
+def draw_tornado(surface: pygame.Surface, *, tip: Point, radius: int) -> None:
+    """Draw a tornado: scribbled loops stacked widest at the top, tapering down to `tip`."""
+    height = round(TUNING.tornado_height * radius / TUNING.tornado_full_radius)
+    colours = TUNING.tornado_colours
+    for index, y in enumerate(range(tip[1] - LOOP_HEIGHT // 2, tip[1] - height + LOOP_HEIGHT // 2, -LOOP_SPACING)):
+        up_the_funnel = (tip[1] - y) / height
+        half_width = round(radius * up_the_funnel) - (index % 3) * 3
+        if half_width < STREAK_WIDTH:
+            continue
+        loop = _ellipse((tip[0], y), (2 * half_width, LOOP_HEIGHT))
+        pygame.draw.ellipse(surface, colours[index % len(colours)], loop)
+        pygame.draw.ellipse(surface, colours[(index + 1) % len(colours)], loop, STREAK_WIDTH)
+
+
+def draw_tornado_warning(surface: pygame.Surface, *, tip: Point) -> None:
+    """Mark the ground a tornado is about to land on, so there is time to walk away."""
+    pygame.draw.circle(surface, TUNING.tornado_warning_colour, tip, TUNING.tornado_warning_radius)

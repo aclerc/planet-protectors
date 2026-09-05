@@ -53,6 +53,7 @@ ignore = [
 "scripts/**/*.py" = ["INP001", "S603"] # build scripts shell out on purpose
 "tests/**/*.py" = [
     "S101", # allow `assert`
+    "S311", # seeding `random.Random` is what makes a drifting boss testable
     "PLR2004", # allow magic values
     "D100", # Missing docstring in public module
     "D101", # Missing docstring in public class
