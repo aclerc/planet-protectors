@@ -212,7 +212,7 @@ def _draw_boss_legs(surface: pygame.Surface, *, centre: Point) -> None:
 
 
 def draw_tornado(surface: pygame.Surface, *, tip: Point, radius: int) -> None:
-    """Draw a tornado: scribbled loops stacked widest at the top, tapering down to `tip`."""
+    """Draw a tornado: multi-coloured hoops stacked widest at the top, tapering down to `tip`."""
     height = round(TUNING.tornado_height * radius / TUNING.tornado_full_radius)
     colours = TUNING.tornado_colours
     for index, y in enumerate(range(tip[1] - LOOP_HEIGHT // 2, tip[1] - height + LOOP_HEIGHT // 2, -LOOP_SPACING)):
@@ -221,8 +221,7 @@ def draw_tornado(surface: pygame.Surface, *, tip: Point, radius: int) -> None:
         if half_width < STREAK_WIDTH:
             continue
         loop = _ellipse((tip[0], y), (2 * half_width, LOOP_HEIGHT))
-        pygame.draw.ellipse(surface, colours[index % len(colours)], loop)
-        pygame.draw.ellipse(surface, colours[(index + 1) % len(colours)], loop, STREAK_WIDTH)
+        pygame.draw.ellipse(surface, colours[index % len(colours)], loop, STREAK_WIDTH)
 
 
 def draw_tornado_warning(surface: pygame.Surface, *, tip: Point) -> None:
