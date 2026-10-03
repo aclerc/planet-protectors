@@ -15,36 +15,63 @@ class Tuning:
     """Tweakable game values."""
 
     boss_max_health: int = 100
-    pina_max_health: int = 100
-    hit_damage: int = 10
-    attack_damage: int = 20
+    pina_max_health: int = 50
+    hit_damage: int = 1
+    attack_damage: int = 2
 
     seconds_between_attacks: float = 3.0
     dodge_window_seconds: float = 2.0
     retry_delay_seconds: float = 2.0
 
+    seconds_between_tornadoes: float = 6.0
+    tornado_warning_seconds: float = 1.5
+    tornado_life_seconds: float = 5.0
+    tornado_damage: int = 5
+
     screen_width: int = 960
     screen_height: int = 540
     frames_per_second: int = 60
 
-    sky_colour: Colour = (236, 234, 230)
+    sky_colour: Colour = (50, 91, 117)
     ground_colour: Colour = (183, 40, 28)
     tree_colour: Colour = (198, 54, 38)
     trunk_colour: Colour = (146, 40, 28)
     bush_colour: Colour = (158, 36, 26)
     ink_colour: Colour = (26, 24, 26)
-    text_colour: Colour = (36, 30, 30)
+    text_colour: Colour = (255, 255, 255)
     ground_top: int = 440
 
     pina_colour: Colour = (204, 46, 32)
     teal_colour: Colour = (22, 140, 146)
     pina_radius: int = 50
     pina_centre: Point = (200, 350)
+    pina_speed: float = 300.0
+    pina_roam_margin: int = 100  # inset from each side edge that keeps his hands on screen
 
     boss_colour: Colour = (146, 148, 152)
     boss_shade_colour: Colour = (108, 110, 116)
+    boss_defeated_colour: Colour = (240, 60, 48)  # brighter than the ground, so a beaten boss still reads against it
+    boss_defeated_shade_colour: Colour = (188, 34, 26)
+    boss_vanish_seconds: float = 4
     boss_radius: int = 95
     boss_centre: Point = (700, 200)
+    boss_speed: float = 120.0
+    boss_roam_margin: Point = (95, 125)  # inset from each edge that keeps ears and feet on screen
+
+    tornado_start_radius: int = 18
+    tornado_full_radius: int = 74
+    tornado_height: int = 230
+    tornado_speed: float = 110.0
+    tornado_turn_seconds: float = 0.8
+    tornado_roam_margin: int = 80  # inset from each side edge that keeps a full-grown funnel on screen
+    tornado_warning_radius: int = 46
+    tornado_warning_colour: Colour = (245, 140, 40)
+    tornado_colours: tuple[Colour, ...] = (
+        (86, 176, 96),  # green
+        (126, 108, 190),  # purple
+        (226, 138, 186),  # pink
+        (140, 138, 146),  # grey
+    )
 
     bar_height: int = 26
     bar_margin: int = 40
@@ -54,11 +81,14 @@ class Tuning:
     pina_bar_colour: Colour = (22, 140, 146)
 
     message_centre: Point = (480, 360)
+    message_line_spacing: int = 56  # gap between the lines of a message with more than one
     label_font_size: int = 56
+    bar_font_size: int = 24  # small enough that a name sits inside a bar
     message_font_size: int = 40
     dodge_button_size: Point = (240, 74)
     dodge_button_centre: Point = (480, 380)
     dodge_colour: Colour = (250, 205, 90)
+    dodge_text_colour: Colour = (36, 30, 30)  # dark, because the button it sits on is pale
 
 
 TUNING = Tuning()

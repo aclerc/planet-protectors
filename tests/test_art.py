@@ -27,6 +27,9 @@ BOSS_REACH: Point = (110, 140)
 # any part of the art, and keeps a whole-screen sweep quick.
 SWEEP_STRIDE = 4
 
+# A box no pixel falls inside, so "painted outside it" means "painted anywhere".
+NOWHERE = pygame.Rect(0, 0, 0, 0)
+
 
 def blank_surface() -> pygame.Surface:
     """Return a screen-sized surface painted the sentinel colour."""
@@ -218,3 +221,109 @@ class TestDrawBoss:
         art.draw_boss(surface, centre=TUNING.boss_centre)
 
         assert painted_outside(surface, box=reach_box(TUNING.boss_centre, BOSS_REACH)) == []
+
+    @staticmethod
+    def test_it_is_drawn_in_whatever_colour_it_is_given() -> None:
+        """A beaten boss is drawn red, which is the whole of how a win is announced."""
+        surface = blank_surface()
+
+        art.draw_boss(surface, centre=TUNING.boss_centre, colour=TUNING.boss_defeated_colour)
+
+        assert colour_at(surface, TUNING.boss_centre) == TUNING.boss_defeated_colour
+
+    @staticmethod
+    def test_a_half_faded_boss_lets_the_planet_show_through() -> None:
+        surface = blank_surface()
+
+        art.draw_boss(surface, centre=TUNING.boss_centre, opacity=0.5)
+
+        blended = colour_at(surface, TUNING.boss_centre)
+        assert blended not in (SENTINEL, TUNING.boss_colour)
+
+    @staticmethod
+    def test_a_boss_faded_all_the_way_out_paints_nothing_at_all() -> None:
+        """Every part of the boss has to fade together; a stray leg left behind is the bug."""
+        surface = blank_surface()
+
+        art.draw_boss(surface, centre=TUNING.boss_centre, opacity=0.0)
+
+        assert painted_outside(surface, box=NOWHERE) == []
+
+
+def painted_width(surface: pygame.Surface, *, row: int) -> int:
+    """Return how many pixels across one row of the surface were painted on."""
+    return sum(colour_at(surface, (x, row)) != SENTINEL for x in range(surface.get_width()))
+
+
+class TestDrawTornado:
+    """The funnel from Pina's drawing: wide scribbled loops at the top, a point at the bottom."""
+
+    @staticmethod
+    def test_it_stands_on_its_tip_and_rises_into_the_sky() -> None:
+        surface = blank_surface()
+        tip = (480, TUNING.ground_top)
+
+        art.draw_tornado(surface, tip=tip, radius=TUNING.tornado_full_radius)
+
+        assert painted_width(surface, row=tip[1] - TUNING.tornado_height // 2) > 0
+        assert painted_width(surface, row=tip[1] + 20) == 0
+
+    @staticmethod
+    def test_it_is_widest_at_the_top_and_narrowest_at_the_tip() -> None:
+        """A funnel drawn the other way up is still a stack of loops, and nothing else notices."""
+        surface = blank_surface()
+        tip = (480, TUNING.ground_top)
+
+        art.draw_tornado(surface, tip=tip, radius=TUNING.tornado_full_radius)
+
+        near_the_top = painted_width(surface, row=tip[1] - TUNING.tornado_height + 20)
+        near_the_tip = painted_width(surface, row=tip[1] - 20)
+        assert near_the_top > near_the_tip
+
+    @staticmethod
+    def test_a_bigger_tornado_is_drawn_wider() -> None:
+        widths = []
+        for radius in (TUNING.tornado_start_radius, TUNING.tornado_full_radius):
+            surface = blank_surface()
+            art.draw_tornado(surface, tip=(480, TUNING.ground_top), radius=radius)
+            widths.append(max(painted_width(surface, row=row) for row in range(0, TUNING.ground_top, 4)))
+
+        assert widths[0] < widths[1]
+
+    @staticmethod
+    def test_it_is_drawn_in_the_colours_of_the_drawing() -> None:
+        surface = blank_surface()
+
+        art.draw_tornado(surface, tip=(480, TUNING.ground_top), radius=TUNING.tornado_full_radius)
+
+        painted = {
+            colour_at(surface, (x, y))
+            for x in range(340, 620, 2)
+            for y in range(TUNING.ground_top - TUNING.tornado_height, TUNING.ground_top, 2)
+        }
+        assert set(TUNING.tornado_colours) <= painted
+
+    @staticmethod
+    def test_it_keeps_within_the_width_the_fight_gives_it() -> None:
+        """The fight decides who the funnel touches from its radius; art wider than that lies."""
+        surface = blank_surface()
+        tip = (480, TUNING.ground_top)
+        radius = TUNING.tornado_full_radius
+
+        art.draw_tornado(surface, tip=tip, radius=radius)
+
+        box = pygame.Rect(0, 0, 2 * radius, TUNING.tornado_height + 20)
+        box.midbottom = (tip[0], tip[1] + 20)
+        assert painted_outside(surface, box=box) == []
+
+
+class TestDrawTornadoWarning:
+    @staticmethod
+    def test_the_warning_is_an_orange_circle_on_the_ground_where_it_will_land() -> None:
+        surface = blank_surface()
+        tip = (480, TUNING.ground_top)
+
+        art.draw_tornado_warning(surface, tip=tip)
+
+        assert colour_at(surface, tip) == TUNING.tornado_warning_colour
+        assert colour_at(surface, (tip[0] + TUNING.tornado_warning_radius + 10, tip[1])) == SENTINEL
