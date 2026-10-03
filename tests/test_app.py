@@ -256,6 +256,21 @@ class TestDrawFight:
 
         assert frames[0] != frames[1]
 
+    @staticmethod
+    def test_pina_is_drawn_up_in_the_air_when_jumping() -> None:
+        pygame.font.init()
+        font = pygame.font.Font(None, TUNING.label_font_size)
+        jumping = BossFight()
+        jumping.jump()
+        jumping.tick(TUNING.jump_seconds / 2)
+        frames = []
+        for fight in (jumping, BossFight()):
+            surface = pygame.Surface((TUNING.screen_width, TUNING.screen_height))
+            draw_fight(surface, fight, font=font, message_font=font, bar_font=font)
+            frames.append(pygame.image.tobytes(surface, "RGB"))
+
+        assert frames[0] != frames[1]
+
 
 class TestNamingTheHealthBars:
     """Two bars with nothing written on them leave a player guessing which one is theirs."""
@@ -375,6 +390,7 @@ class TestDrawInstructions:
         written = " ".join(INSTRUCTIONS).upper()
 
         assert "ARROW" in written
+        assert "UP" in written
         assert "CLICK" in written
         assert "DODGE" in written
         assert "TORNADO" in written

@@ -1,6 +1,8 @@
 import random
 from itertools import pairwise
 
+import pytest
+
 from planet_protectors.bossfight import BossFight, FightState, Tornado
 from planet_protectors.tuning import TUNING
 
@@ -366,6 +368,181 @@ class TestPinaMovement:
 
         assert fight.pina_centre == TUNING.pina_centre
         assert fight.pina_direction == 0
+
+
+def jump_and_land(fight: BossFight) -> list[int]:
+    """Jump once and play it through to landing, returning how high Pina's centre was each frame."""
+    fight.jump()
+    heights = []
+    while fight.airborne:
+        fight.tick(A_FRAME)
+        heights.append(TUNING.pina_centre[1] - fight.pina_centre[1])
+    return heights
+
+
+class TestJumping:
+    """Up jumps Pina into an arc, and holding it keeps her bouncing."""
+
+    @staticmethod
+    def test_pina_starts_on_the_ground() -> None:
+        assert not BossFight().airborne
+
+    @staticmethod
+    def test_jumping_lifts_pina_off_the_ground() -> None:
+        fight = BossFight()
+
+        fight.jump()
+        advance(fight, A_MOMENT)
+
+        assert fight.pina_centre[1] < TUNING.pina_centre[1]
+
+    @staticmethod
+    def test_a_jump_reaches_about_half_the_screen_high() -> None:
+        heights = jump_and_land(BossFight())
+
+        assert abs(max(heights) - TUNING.jump_height) <= 2
+        assert TUNING.jump_height == TUNING.screen_height // 2
+
+    @staticmethod
+    def test_pina_lands_back_on_the_ground() -> None:
+        fight = BossFight()
+
+        jump_and_land(fight)
+
+        assert fight.pina_centre == TUNING.pina_centre
+
+    @staticmethod
+    def test_a_jump_lasts_as_long_as_tuned() -> None:
+        heights = jump_and_land(BossFight())
+
+        assert abs(len(heights) * A_FRAME - TUNING.jump_seconds) <= A_FRAME
+
+    @staticmethod
+    def test_with_no_arrow_held_pina_jumps_straight_up() -> None:
+        fight = BossFight()
+
+        fight.jump()
+        advance(fight, TUNING.jump_seconds / 2)
+
+        assert fight.pina_centre[0] == TUNING.pina_centre[0]
+
+    @staticmethod
+    @pytest.mark.parametrize("direction", [-1, 1])
+    def test_with_an_arrow_held_pina_jumps_as_far_as_she_would_walk(direction: int) -> None:
+        """The arc covers the same ground as walking for the same time, so jumping is never a shortcut."""
+        jumper = BossFight()
+        jumper.steer_pina(direction)
+        heights = jump_and_land(jumper)
+
+        walker = BossFight()
+        walker.steer_pina(direction)
+        for _ in heights:
+            walker.tick(A_FRAME)
+
+        assert jumper.pina_centre[0] != TUNING.pina_centre[0]
+        assert jumper.pina_centre[0] == walker.pina_centre[0]
+
+    @staticmethod
+    def test_the_arc_keeps_its_direction_if_the_arrow_is_let_go() -> None:
+        """Which way a jump goes is settled at take-off; there is no steering in mid-air."""
+        steady = BossFight()
+        steady.steer_pina(1)
+        jump_and_land(steady)
+
+        let_go = BossFight()
+        let_go.steer_pina(1)
+        let_go.jump()
+        advance(let_go, A_MOMENT)
+        let_go.steer_pina(-1)
+        while let_go.airborne:
+            let_go.tick(A_FRAME)
+
+        assert abs(let_go.pina_centre[0] - steady.pina_centre[0]) <= 1
+
+    @staticmethod
+    def test_a_jump_cannot_carry_pina_off_either_edge() -> None:
+        fight = BossFight(pina_x=TUNING.pina_roam_margin)
+        fight.steer_pina(-1)
+
+        jump_and_land(fight)
+
+        assert fight.pina_centre[0] == TUNING.pina_roam_margin
+
+    @staticmethod
+    def test_pressing_up_in_mid_air_does_not_jump_again() -> None:
+        fight = BossFight()
+        fight.jump()
+        advance(fight, TUNING.jump_seconds / 2)
+        risen = fight.pina_centre
+
+        fight.jump()
+
+        assert fight.pina_centre == risen
+
+    @staticmethod
+    def test_holding_up_keeps_pina_jumping() -> None:
+        """The game loop calls `jump` every frame the key is down; each landing springs straight back up."""
+        fight = BossFight()
+        takeoffs = 0
+        for _ in range(round(3.5 * TUNING.jump_seconds / A_FRAME)):
+            if not fight.airborne:
+                takeoffs += 1
+            fight.jump()
+            fight.tick(A_FRAME)
+
+        assert takeoffs == 4
+
+    @staticmethod
+    def test_pina_cannot_jump_while_paused() -> None:
+        fight = BossFight(paused=True)
+
+        fight.jump()
+
+        assert not fight.airborne
+
+    @staticmethod
+    @pytest.mark.parametrize("state", [FightState.WON, FightState.LOST])
+    def test_pina_cannot_jump_once_the_fight_is_over(state: FightState) -> None:
+        fight = BossFight(state=state)
+
+        fight.jump()
+
+        assert not fight.airborne
+
+    @staticmethod
+    def test_winning_in_mid_air_lets_pina_land() -> None:
+        """Otherwise she hangs in the sky for the whole of the boss fading away."""
+        fight = BossFight()
+        fight.jump()
+        advance(fight, A_MOMENT)
+
+        fight.hit_boss(damage=TUNING.boss_max_health)
+        advance(fight, TUNING.jump_seconds)
+
+        assert fight.pina_centre == TUNING.pina_centre
+
+    @staticmethod
+    def test_pausing_holds_pina_in_the_air() -> None:
+        fight = BossFight()
+        fight.jump()
+        advance(fight, A_MOMENT)
+        held_at = fight.pina_centre
+
+        fight.pause()
+        advance(fight, TUNING.jump_seconds)
+
+        assert fight.pina_centre == held_at
+
+    @staticmethod
+    def test_restarting_puts_pina_back_on_the_ground() -> None:
+        fight = BossFight()
+        fight.jump()
+        advance(fight, A_MOMENT)
+
+        fight.restart()
+
+        assert not fight.airborne
+        assert fight.pina_centre == TUNING.pina_centre
 
 
 class TestPausing:

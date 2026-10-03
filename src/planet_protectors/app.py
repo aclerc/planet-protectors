@@ -22,7 +22,7 @@ PAUSE_MESSAGE = ("Paused", "Press BACKSPACE to play on")
 WIN_MESSAGE = ("You saved the planet, Pina!", "Press R to play again")
 INSTRUCTIONS = (
     "How to play",
-    "Arrow keys walk Pina left and right",
+    "Arrow keys walk Pina, UP jumps",
     "Click the raccoon to hit it",
     "Click DODGE, and walk away from tornadoes",
     "P pauses, BACKSPACE plays on",
@@ -209,6 +209,8 @@ async def run() -> None:
         if started:
             keys = pygame.key.get_pressed()
             fight.steer_pina(steering_direction(left_held=keys[pygame.K_LEFT], right_held=keys[pygame.K_RIGHT]))
+            if keys[pygame.K_UP]:
+                fight.jump()
             fight.tick(clock.get_time() / 1000)
             draw_fight(screen, fight, font=font, message_font=message_font, bar_font=bar_font)
         else:

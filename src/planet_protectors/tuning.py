@@ -47,6 +47,8 @@ class Tuning:
     pina_centre: Point = (200, 350)
     pina_speed: float = 300.0
     pina_roam_margin: int = 100  # inset from each side edge that keeps his hands on screen
+    jump_height: int = 270
+    jump_seconds: float = 1.0
 
     boss_colour: Colour = (146, 148, 152)
     boss_shade_colour: Colour = (108, 110, 116)

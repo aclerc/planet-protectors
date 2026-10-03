@@ -64,6 +64,8 @@ class BossFight:
     boss_target: Point = TUNING.boss_centre
     pina_x: float = TUNING.pina_centre[0]
     pina_direction: int = 0
+    seconds_into_jump: float | None = None
+    jump_direction: int = 0
     tornado: Tornado | None = None
     seconds_to_next_tornado: float = TUNING.seconds_between_tornadoes
     seconds_to_vanish: float = TUNING.boss_vanish_seconds
@@ -71,8 +73,21 @@ class BossFight:
 
     @property
     def pina_centre(self) -> Point:
-        """Where Pina has walked to; he only moves sideways."""
-        return (round(self.pina_x), TUNING.pina_centre[1])
+        """Where Pina has walked or jumped to."""
+        return (round(self.pina_x), TUNING.pina_centre[1] - round(self.jump_rise))
+
+    @property
+    def airborne(self) -> bool:
+        """Whether Pina is partway through a jump."""
+        return self.seconds_into_jump is not None
+
+    @property
+    def jump_rise(self) -> float:
+        """How far above the ground Pina is, following a parabola that peaks at `jump_height`."""
+        if self.seconds_into_jump is None:
+            return 0.0
+        progress = min(self.seconds_into_jump / TUNING.jump_seconds, 1.0)
+        return 4 * TUNING.jump_height * progress * (1 - progress)
 
     @property
     def boss_centre(self) -> Point:
@@ -114,6 +129,13 @@ class BossFight:
         """Set which way the player is walking Pina: -1 for left, 1 for right, 0 for still."""
         self.pina_direction = direction
 
+    def jump(self) -> None:
+        """Jump, in an arc the way Pina is walking, unless already in the air or the fight is not running."""
+        if self.paused or self.airborne or self.state is not FightState.FIGHTING:
+            return
+        self.seconds_into_jump = 0.0
+        self.jump_direction = self.pina_direction
+
     def pause(self) -> None:
         """Freeze the fight until `resume` is called."""
         self.paused = True
@@ -127,6 +149,9 @@ class BossFight:
         if self.paused:
             return
 
+        if self.state is not FightState.FIGHTING and self.airborne:
+            self._move_pina(dt)
+
         if self.state is FightState.LOST:
             self.seconds_to_retry -= dt
             if self.seconds_to_retry <= 0:
@@ -138,7 +163,7 @@ class BossFight:
             return
 
         self._drift(dt)
-        self._walk(dt)
+        self._move_pina(dt)
         self._blow(dt)
 
         if self.attack_incoming:
@@ -165,6 +190,8 @@ class BossFight:
         self.boss_target = TUNING.boss_centre
         self.pina_x = TUNING.pina_centre[0]
         self.pina_direction = 0
+        self.seconds_into_jump = None
+        self.jump_direction = 0
         self.tornado = None
         self.seconds_to_next_tornado = TUNING.seconds_between_tornadoes
         self.seconds_to_vanish = TUNING.boss_vanish_seconds
@@ -180,8 +207,15 @@ class BossFight:
         self.boss_x += towards[0] / distance * step
         self.boss_y += towards[1] / distance * step
 
-    def _walk(self, dt: float) -> None:
-        walked = self.pina_x + self.pina_direction * TUNING.pina_speed * dt
+    def _move_pina(self, dt: float) -> None:
+        """Walk Pina, or carry her along the arc of a jump and land her when it ends."""
+        direction = self.pina_direction
+        if self.seconds_into_jump is not None:
+            direction = self.jump_direction
+            self.seconds_into_jump += dt
+            if self.seconds_into_jump >= TUNING.jump_seconds:
+                self.seconds_into_jump = None
+        walked = self.pina_x + direction * TUNING.pina_speed * dt
         self.pina_x = min(max(walked, TUNING.pina_roam_margin), TUNING.screen_width - TUNING.pina_roam_margin)
 
     def _blow(self, dt: float) -> None:
